@@ -97,6 +97,7 @@ body {
 }
 .pre-card h2 { font-size: 28px; margin-bottom: 8px; }
 .pre-goal { font-size: 17px; margin-bottom: 18px; opacity: .95; }
+.pre-tip { font-size: 13px; opacity: .8; }
 
 /* ---------- 遊戲 HUD ---------- */
 .game-top { max-width: 560px; }
@@ -127,6 +128,21 @@ body {
 .slot.alt { background: rgba(255,255,255,.05); }
 .slot.jelly1 { background: rgba(120,200,255,.38); box-shadow: inset 0 0 0 2px rgba(180,230,255,.5); }
 .slot.jelly2 { background: rgba(120,200,255,.6); box-shadow: inset 0 0 0 3px rgba(180,230,255,.7); }
+/* 空洞：該格不存在 */
+.slot.hole { background: transparent !important; box-shadow: none !important; }
+/* 糖霜：覆蓋該格，要消旁邊才會破 */
+.slot.ice {
+  z-index: 3;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 5px, rgba(200,235,255,.55) 5px 10px);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.85), inset 0 0 8px rgba(150,200,255,.7);
+  border-radius: 8px;
+}
+.slot.ice2 { box-shadow: inset 0 0 0 4px #fff, inset 0 0 10px rgba(120,180,255,.9); }
+.slot.ice::after {
+  content: "🧊"; position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: calc(var(--cell) * .5); opacity: .9;
+}
 
 /* ---------- 糖果 ----------
  * 外層 .candy 只負責「定位」(translate)，內層 .ci 負責顏色與縮放動畫，
@@ -142,22 +158,16 @@ body {
   position: absolute; inset: 0; display: grid; place-items: center;
   transition: transform .12s; will-change: transform;
 }
-.ci .fruit { font-size: calc(var(--cell) * .62); line-height: 1; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); pointer-events: none; }
+.ci .fruit { font-size: calc(var(--cell) * .74); line-height: 1; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); pointer-events: none; }
+/* 不再有彩色圓盤，::after 只作為特殊糖效果的圖層 */
 .ci::after {
   content: ""; position: absolute; inset: 12%;
-  border-radius: 40%; z-index: -1; opacity: .92;
-  box-shadow: inset 0 -3px 6px rgba(0,0,0,.25), inset 0 3px 6px rgba(255,255,255,.45);
+  border-radius: 40%; z-index: -1;
 }
-.ci.t0::after { background: var(--c0); }
-.ci.t1::after { background: var(--c1); }
-.ci.t2::after { background: var(--c2); }
-.ci.t3::after { background: var(--c3); }
-.ci.t4::after { background: var(--c4); }
-.ci.t5::after { background: var(--c5); }
 
 .candy.selected { z-index: 5; }
-.candy.selected .ci { transform: scale(1.12); }
-.candy.selected .ci::after { box-shadow: 0 0 0 3px #fff, inset 0 -3px 6px rgba(0,0,0,.25); }
+.candy.selected .ci { transform: scale(1.14); }
+.candy.selected .ci::after { box-shadow: 0 0 0 3px #fff, 0 0 10px 2px rgba(255,255,255,.6); }
 
 /* 條紋糖 */
 .ci.striped-h::after,
@@ -193,6 +203,14 @@ body {
 }
 .candy.pop .ci { animation: pop-in .32s ease; }
 @keyframes pop-in { 0% { transform: scale(.2); } 60% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+/* 食材：會掉落、不參與配對 */
+.ci.ingredient .fruit { font-size: calc(var(--cell) * .66); }
+.ci.ingredient::after {
+  background: radial-gradient(circle at 35% 30%, #b9793f, #6e3f15);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), 0 0 8px rgba(0,0,0,.4);
+  opacity: .95;
+}
 
 /* ---------- 道具列 ---------- */
 .booster-bar { display: flex; gap: 14px; margin: 10px 0 4px; }

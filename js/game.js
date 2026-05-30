@@ -1,30 +1,56 @@
 /* =========================================================================
- * game.js — 單關遊戲流程：步數、目標、勝負判定（不碰 DOM）
- * 與 ui.js 透過回呼溝通動畫。
+ * game.js — 單關遊戲流程：步數、目標、勝負（不碰 DOM）
  * ========================================================================= */
 
 const Game = (() => {
   let level = null;
-  let state = null;        // engine state
+  let state = null;
   let moves = 0;
   let score = 0;
-  let status = 'idle';     // idle | playing | won | lost
-  let extraMovesUsed = 0;  // in-game MOVES 密碼用
+  let status = 'idle';      // idle | playing | won | lost
+  let jellyTotal = 0;
+  let ingredientGoal = 0;
+
+  function placeIngredients(st, count) {
+    // 在最上排挑選間隔均勻、可通行、整欄到底都可通行的欄位放食材
+    const cols = st.cols, rows = st.rows;
+    const usable = [];
+    for (let c = 0; c < cols; c++) {
+      let ok = Engine.passable(st, 0, c);
+      for (let r = 0; r < rows && ok; r++) if (!Engine.passable(st, r, c)) ok = false;
+      if (ok) usable.push(c);
+    }
+    if (usable.length === 0) return;
+    const picked = [];
+    const step = usable.length / count;
+    for (let k = 0; k < count; k++) picked.push(usable[Math.min(usable.length - 1, Math.floor(k * step))]);
+    for (const c of new Set(picked)) st.grid[0][c] = Engine.makeIngredient();
+  }
 
   function start(lv) {
     level = lv;
-    state = Engine.newState(lv.rows, lv.cols, lv.colors);
-    // 確保有合法步、且無立即配對
+    const { rows, cols, colors } = lv;
+    state = Engine.makeEmptyState(rows, cols, colors);
+    if (lv.holes) state.blocked = buildHoles(lv.holes, rows, cols);
+    if (lv.icing) state.blocker = buildIcing(lv.icing, rows, cols);
+    if (lv.jelly) state.jelly = buildJelly(lv.jelly, rows, cols);
+    // 空洞 / 糖霜 下方不放果凍（否則無法達成）
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        if (state.blocked[r][c] || state.blocker[r][c] > 0) state.jelly[r][c] = 0;
+
     let guard = 0;
-    while (guard < 60 && (Engine.findMatches(state) || !Engine.hasValidMove(state))) {
-      state.grid = Engine.createBoard(lv.rows, lv.cols, lv.colors);
-      guard++;
-    }
-    state.jelly = buildJelly(lv, lv.rows, lv.cols);
+    do { Engine.fillCandies(state); guard++; }
+    while (guard < 80 && (Engine.findMatches(state) || !Engine.hasValidMove(state)));
+
+    ingredientGoal = lv.ingredients || 0;
+    if (ingredientGoal > 0) placeIngredients(state, ingredientGoal);
+    state.ingredientsCollected = 0;
+
+    jellyTotal = jellyRemaining();
     moves = lv.moves;
     score = 0;
     status = 'playing';
-    extraMovesUsed = 0;
   }
 
   function jellyRemaining() {
@@ -35,10 +61,12 @@ const Game = (() => {
   }
 
   function goalProgress() {
-    if (level.type === 'score') {
+    if (level.type === 'score')
       return { type: 'score', current: score, target: level.target, done: score >= level.target };
-    }
-    return { type: 'jelly', current: jellyRemaining(), done: jellyRemaining() === 0 };
+    if (level.type === 'ingredient')
+      return { type: 'ingredient', current: state.ingredientsCollected, target: ingredientGoal, done: state.ingredientsCollected >= ingredientGoal };
+    const rem = jellyRemaining();
+    return { type: 'jelly', current: rem, total: jellyTotal, done: rem === 0 };
   }
 
   function calcStars() {
@@ -46,24 +74,16 @@ const Game = (() => {
     if (score >= s[2]) return 3;
     if (score >= s[1]) return 2;
     if (score >= s[0]) return 1;
-    return level.type === 'jelly' ? 1 : 0; // 果凍關完成至少 1 星
+    return level.type === 'score' ? 0 : 1; // 果凍/食材完成至少 1 星
   }
 
-  /* 由 ui 在每次玩家成功移動後呼叫，檢查勝負 */
   function checkEnd() {
     if (status !== 'playing') return status;
     const g = goalProgress();
-    if (level.type === 'jelly' && g.done) { status = 'won'; }
-    else if (moves <= 0) {
-      if (level.type === 'score') status = (score >= level.target) ? 'won' : 'lost';
-      else status = g.done ? 'won' : 'lost';
-    }
+    if (g.done) status = 'won';           // 達標立刻過關
+    else if (moves <= 0) status = 'lost';
     return status;
   }
-
-  function addScore(n) { score += n; }
-  function spendMove() { if (moves > 0) moves--; }
-  function addMoves(n) { moves += n; }
 
   return {
     start,
@@ -73,6 +93,9 @@ const Game = (() => {
     get score() { return score; },
     get status() { return status; },
     set status(v) { status = v; },
-    goalProgress, calcStars, checkEnd, addScore, spendMove, addMoves, jellyRemaining,
+    goalProgress, calcStars, checkEnd, jellyRemaining,
+    addScore(n) { score += n; },
+    spendMove() { if (moves > 0) moves--; },
+    addMoves(n) { moves += n; },
   };
 })();

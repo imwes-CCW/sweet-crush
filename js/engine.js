@@ -1,7 +1,15 @@
 /* =========================================================================
  * engine.js — 三消核心引擎（純邏輯，不碰 DOM）
- * 棋盤以 cell 物件組成：{ id, type(0..n-1 顏色; -1 表示彩色炸彈), special }
- * special: 0=普通 1=橫條紋 2=直條紋 3=包裝糖 4=彩色炸彈
+ *
+ * cell：{ id, type, special, ingredient? }
+ *   type: 0..n-1 顏色；-1 彩色炸彈；-2 食材
+ *   special: 0=普通 1=橫條紋 2=直條紋 3=包裝糖 4=彩色炸彈
+ *   ingredient: true 表示這是食材（會掉落、不參與配對、要落到底收集）
+ *
+ * 障礙物（存在 state 上的平行陣列）：
+ *   blocked[r][c] = true   永久空洞（造型棋盤）
+ *   blocker[r][c] = n>0    糖霜層數，該格暫時不可放糖果，消其相鄰格可破一層
+ *   jelly[r][c]   = n>0    果凍層數
  * ========================================================================= */
 
 const SPECIAL = { NONE: 0, STRIPED_H: 1, STRIPED_V: 2, WRAPPED: 3, BOMB: 4 };
@@ -11,43 +19,47 @@ const Engine = (() => {
   const key = (r, c) => r + ',' + c;
   const randInt = (n) => Math.floor(Math.random() * n);
 
-  function makeCell(type, special = SPECIAL.NONE) {
-    return { id: _id++, type, special };
+  function makeCell(type, special = SPECIAL.NONE) { return { id: _id++, type, special, ingredient: false }; }
+  function makeIngredient() { return { id: _id++, type: -2, special: SPECIAL.NONE, ingredient: true }; }
+
+  function isMatchable(cell) { return !!cell && !cell.ingredient && cell.special !== SPECIAL.BOMB; }
+  function passable(state, r, c) { return !state.blocked[r][c] && state.blocker[r][c] === 0; }
+
+  function makeEmptyState(rows, cols, numColors) {
+    return {
+      rows, cols, numColors,
+      grid: Array.from({ length: rows }, () => new Array(cols).fill(null)),
+      jelly: Array.from({ length: rows }, () => new Array(cols).fill(0)),
+      blocked: Array.from({ length: rows }, () => new Array(cols).fill(false)),
+      blocker: Array.from({ length: rows }, () => new Array(cols).fill(0)),
+      ingredientsCollected: 0,
+      cascade: 1,
+    };
   }
 
-  function isMatchable(cell) {
-    return cell && cell.special !== SPECIAL.BOMB; // 彩色炸彈不參與一般顏色配對
-  }
+  const sameColor = (state, r, c, t) => {
+    const g = state.grid[r][c];
+    return g && !g.ingredient && g.special !== SPECIAL.BOMB && g.type === t;
+  };
 
-  /* 建立初始棋盤：避免一開始就有配對 */
-  function createBoard(rows, cols, numColors) {
-    const grid = [];
+  /* 填滿所有「可通行且非食材」的格子，避免一開始就有三連 */
+  function fillCandies(state) {
+    const { rows, cols, numColors, grid } = state;
     for (let r = 0; r < rows; r++) {
-      grid[r] = [];
       for (let c = 0; c < cols; c++) {
-        let t;
-        let guard = 0;
+        if (!passable(state, r, c)) { grid[r][c] = null; continue; }
+        if (grid[r][c] && grid[r][c].ingredient) continue;
+        let t, guard = 0;
         do {
           t = randInt(numColors);
           guard++;
-        } while (
-          guard < 50 &&
-          ((c >= 2 && grid[r][c - 1].type === t && grid[r][c - 2].type === t) ||
-            (r >= 2 && grid[r - 1][c].type === t && grid[r - 2][c].type === t))
-        );
+        } while (guard < 60 && (
+          (c >= 2 && sameColor(state, r, c - 1, t) && sameColor(state, r, c - 2, t)) ||
+          (r >= 2 && sameColor(state, r - 1, c, t) && sameColor(state, r - 2, c, t))
+        ));
         grid[r][c] = makeCell(t);
       }
     }
-    return grid;
-  }
-
-  function newState(rows, cols, numColors) {
-    return {
-      rows, cols, numColors,
-      grid: createBoard(rows, cols, numColors),
-      jelly: Array.from({ length: rows }, () => new Array(cols).fill(0)),
-      cascade: 1,
-    };
   }
 
   /* ---------------- 配對偵測 ---------------- */
@@ -55,7 +67,6 @@ const Engine = (() => {
     const { grid, rows, cols } = state;
     const matched = Array.from({ length: rows }, () => new Array(cols).fill(false));
 
-    // 水平
     for (let r = 0; r < rows; r++) {
       let c = 0;
       while (c < cols) {
@@ -67,7 +78,6 @@ const Engine = (() => {
         } else c++;
       }
     }
-    // 垂直
     for (let c = 0; c < cols; c++) {
       let r = 0;
       while (r < rows) {
@@ -80,13 +90,11 @@ const Engine = (() => {
       }
     }
 
-    // 收集是否有任何配對
     let any = false;
     for (let r = 0; r < rows && !any; r++)
       for (let c = 0; c < cols; c++) if (matched[r][c]) { any = true; break; }
     if (!any) return null;
 
-    // flood fill 把相鄰且同色的配對格聚成 group
     const visited = Array.from({ length: rows }, () => new Array(cols).fill(false));
     const groups = [];
     const allCells = [];
@@ -100,8 +108,7 @@ const Engine = (() => {
           while (stack.length) {
             const [cr, cc] = stack.pop();
             cells.push({ r: cr, c: cc });
-            const nb = [[cr - 1, cc], [cr + 1, cc], [cr, cc - 1], [cr, cc + 1]];
-            for (const [nr, ncc] of nb) {
+            for (const [nr, ncc] of [[cr - 1, cc], [cr + 1, cc], [cr, cc - 1], [cr, cc + 1]]) {
               if (nr >= 0 && nr < rows && ncc >= 0 && ncc < cols &&
                 matched[nr][ncc] && !visited[nr][ncc] &&
                 isMatchable(grid[nr][ncc]) && grid[nr][ncc].type === t) {
@@ -118,7 +125,6 @@ const Engine = (() => {
     return { groups, allCells };
   }
 
-  /* 分析一個配對群：決定要生成的特殊糖、生成位置候選 */
   function analyzeGroup(cells) {
     const byRow = {}, byCol = {};
     for (const { r, c } of cells) {
@@ -129,7 +135,6 @@ const Engine = (() => {
     let maxH = 1, maxV = 1;
     let longest = { len: 0, mid: cells[0] };
 
-    // 水平連續
     for (const r in byRow) {
       const arr = byRow[r].sort((a, b) => a - b);
       let s = 0;
@@ -143,7 +148,6 @@ const Engine = (() => {
         }
       }
     }
-    // 垂直連續
     for (const c in byCol) {
       const arr = byCol[c].sort((a, b) => a - b);
       let s = 0;
@@ -164,14 +168,10 @@ const Engine = (() => {
     else if (hasH && hasV) special = SPECIAL.WRAPPED;
     else if (Math.max(maxH, maxV) === 4) special = (maxH >= 4) ? SPECIAL.STRIPED_H : SPECIAL.STRIPED_V;
 
-    // 交叉點（同時屬於 >=3 的橫排與直排）
     let intersection = null;
     for (const { r, c } of cells) {
-      if ((rowRun[key(r, c)] || 0) >= 3 && (colRun[key(r, c)] || 0) >= 3) {
-        intersection = { r, c }; break;
-      }
+      if ((rowRun[key(r, c)] || 0) >= 3 && (colRun[key(r, c)] || 0) >= 3) { intersection = { r, c }; break; }
     }
-
     return { cells, special, intersection, longestMid: longest.mid };
   }
 
@@ -200,13 +200,12 @@ const Engine = (() => {
           if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) out.push({ r: nr, c: nc });
         }
     } else if (cell.special === SPECIAL.BOMB) {
-      // 連鎖中被引爆 → 清掉場上數量最多的顏色
       const count = {};
       let best = -1, bestN = -1;
       for (let rr = 0; rr < rows; rr++)
         for (let cc = 0; cc < cols; cc++) {
           const g = grid[rr][cc];
-          if (g && g.special !== SPECIAL.BOMB) {
+          if (g && !g.ingredient && g.special !== SPECIAL.BOMB) {
             count[g.type] = (count[g.type] || 0) + 1;
             if (count[g.type] > bestN) { bestN = count[g.type]; best = g.type; }
           }
@@ -214,15 +213,15 @@ const Engine = (() => {
       for (let rr = 0; rr < rows; rr++)
         for (let cc = 0; cc < cols; cc++) {
           const g = grid[rr][cc];
-          if (g && g.type === best) out.push({ r: rr, c: cc });
+          if (g && !g.ingredient && g.type === best) out.push({ r: rr, c: cc });
         }
     }
     return out;
   }
 
-  /* 執行清除（含特殊糖連鎖引爆），回傳被清除清單與分數 */
+  /* 執行清除：含特殊糖連鎖、果凍消層、糖霜破層；食材不被消除 */
   function executeClears(state, baseCells, cascade, protectedSet) {
-    const { grid, rows, cols, jelly } = state;
+    const { grid, rows, cols, jelly, blocker } = state;
     const clearMap = new Map();
     const activated = new Set();
     const stack = baseCells.slice();
@@ -232,12 +231,11 @@ const Engine = (() => {
       const k = key(r, c);
       if (protectedSet && protectedSet.has(k)) continue;
       const cell = grid[r][c];
-      if (!cell) continue;
+      if (!cell || cell.ingredient) continue;
       if (!clearMap.has(k)) clearMap.set(k, { r, c, id: cell.id });
       if (cell.special && !activated.has(k)) {
         activated.add(k);
-        const eff = specialEffect(state, r, c, cell);
-        for (const p of eff) stack.push(p);
+        for (const p of specialEffect(state, r, c, cell)) stack.push(p);
       }
     }
 
@@ -248,27 +246,78 @@ const Engine = (() => {
     for (const { r, c } of cleared) {
       if (jelly[r][c] > 0) { jelly[r][c]--; jellyCleared.push({ r, c, layer: jelly[r][c] }); }
     }
-    for (const { r, c } of cleared) grid[r][c] = null;
 
-    return { cleared, score, jellyCleared };
+    // 糖霜：與任一被消除格相鄰 → 破一層（每步每格最多一層）
+    const iceSet = new Set();
+    for (const { r, c } of cleared) {
+      for (const [nr, nc] of [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]) {
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && blocker[nr][nc] > 0) iceSet.add(key(nr, nc));
+      }
+    }
+    const brokenIcing = [];
+    for (const kk of iceSet) {
+      const [r, c] = kk.split(',').map(Number);
+      blocker[r][c]--;
+      brokenIcing.push({ r, c, layer: blocker[r][c] });
+      score += 20;
+    }
+
+    for (const { r, c } of cleared) grid[r][c] = null;
+    return { cleared, score, jellyCleared, brokenIcing };
   }
 
-  /* 重力下落 + 從頂端補滿新糖 */
+  /* 重力：以「不可通行格（空洞/糖霜）」把每欄切成數段，各段內各自下落＋補滿 */
   function applyGravity(state) {
     const { grid, rows, cols, numColors } = state;
     for (let c = 0; c < cols; c++) {
-      let write = rows - 1;
-      for (let r = rows - 1; r >= 0; r--) {
-        if (grid[r][c]) {
-          if (write !== r) { grid[write][c] = grid[r][c]; grid[r][c] = null; }
-          write--;
+      let r = rows - 1;
+      while (r >= 0) {
+        if (!passable(state, r, c)) { r--; continue; }
+        const bottom = r;
+        let top = r;
+        while (top - 1 >= 0 && passable(state, top - 1, c)) top--;
+        let write = bottom;
+        for (let rr = bottom; rr >= top; rr--) {
+          if (grid[rr][c]) {
+            if (write !== rr) { grid[write][c] = grid[rr][c]; grid[rr][c] = null; }
+            write--;
+          }
         }
+        for (let rr = write; rr >= top; rr--) grid[rr][c] = makeCell(randInt(numColors));
+        r = top - 1;
       }
-      for (let r = write; r >= 0; r--) grid[r][c] = makeCell(randInt(numColors));
     }
   }
 
-  /* 一次解算步驟：找配對→生成特殊糖→清除→重力。無配對回 {anyMatch:false} */
+  /* 收集落到最底列的食材 */
+  function collectIngredients(state) {
+    const { grid, rows, cols } = state;
+    const br = rows - 1;
+    const out = [];
+    for (let c = 0; c < cols; c++) {
+      const cell = grid[br][c];
+      if (cell && cell.ingredient && passable(state, br, c)) {
+        out.push({ id: cell.id, r: br, c });
+        grid[br][c] = null;
+        state.ingredientsCollected++;
+      }
+    }
+    return out;
+  }
+
+  /* 落下＋收集，反覆直到沒有食材抵達底部 */
+  function settle(state) {
+    let collected = [];
+    for (let loop = 0; loop < 200; loop++) {
+      applyGravity(state);
+      const got = collectIngredients(state);
+      collected = collected.concat(got);
+      if (got.length === 0) break;
+    }
+    return collected;
+  }
+
+  /* 一次解算步驟 */
   function step(state, swapCells) {
     const mr = findMatches(state);
     if (!mr) { state.cascade = 1; return { anyMatch: false }; }
@@ -276,12 +325,10 @@ const Engine = (() => {
     const cascade = state.cascade;
     const protectedSet = new Set();
     const specialsCreated = [];
-
     for (const g of mr.groups) {
       if (g.special !== SPECIAL.NONE) {
         const pos = choosePos(g, swapCells);
-        const k = key(pos.r, pos.c);
-        protectedSet.add(k);
+        protectedSet.add(key(pos.r, pos.c));
         const cell = state.grid[pos.r][pos.c];
         cell.special = g.special;
         if (g.special === SPECIAL.BOMB) cell.type = -1;
@@ -292,8 +339,6 @@ const Engine = (() => {
     const baseCells = mr.allCells.filter(p => !protectedSet.has(key(p.r, p.c)));
     const res = executeClears(state, baseCells, cascade, protectedSet);
     res.score += specialsCreated.length * 120;
-
-    // 生成特殊糖的格子也清掉底下果凍
     for (const s of specialsCreated) {
       if (state.jelly[s.r][s.c] > 0) {
         state.jelly[s.r][s.c]--;
@@ -301,9 +346,13 @@ const Engine = (() => {
       }
     }
 
-    applyGravity(state);
+    const collected = settle(state);
     state.cascade = cascade + 1;
-    return { anyMatch: true, cleared: res.cleared, score: res.score, jellyCleared: res.jellyCleared, specialsCreated };
+    return {
+      anyMatch: true, cleared: res.cleared, score: res.score,
+      jellyCleared: res.jellyCleared, brokenIcing: res.brokenIcing,
+      specialsCreated, collected,
+    };
   }
 
   /* ---------------- 交換相關 ---------------- */
@@ -316,12 +365,11 @@ const Engine = (() => {
 
   function isComboSwap(state, a, b) {
     const ca = state.grid[a.r][a.c], cb = state.grid[b.r][b.c];
-    if (!ca || !cb) return false;
+    if (!ca || !cb || ca.ingredient || cb.ingredient) return false;
     if (ca.special === SPECIAL.BOMB || cb.special === SPECIAL.BOMB) return true;
     return ca.special !== SPECIAL.NONE && cb.special !== SPECIAL.NONE;
   }
 
-  /* 執行兩顆特殊糖的組合技（交換後呼叫，已在 grid 內就位） */
   function applyCombo(state, a, b) {
     const { grid, rows, cols } = state;
     const ca = grid[a.r][a.c], cb = grid[b.r][b.c];
@@ -330,14 +378,13 @@ const Engine = (() => {
     const addRow = (r) => { for (let c = 0; c < cols; c++) addKey(r, c); };
     const addCol = (c) => { for (let r = 0; r < rows; r++) addKey(r, c); };
     const addBox = (r, c, rad) => { for (let dr = -rad; dr <= rad; dr++) for (let dc = -rad; dc <= rad; dc++) addKey(r + dr, c + dc); };
-    const addColor = (t) => { for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const g = grid[r][c]; if (g && g.type === t) addKey(r, c); } };
-    const eachColor = (t, fn) => { for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const g = grid[r][c]; if (g && g.type === t) fn(r, c); } };
+    const addColor = (t) => { for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const g = grid[r][c]; if (g && !g.ingredient && g.type === t) addKey(r, c); } };
+    const eachColor = (t, fn) => { for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const g = grid[r][c]; if (g && !g.ingredient && g.type === t) fn(r, c); } };
     const isStriped = (s) => s === SPECIAL.STRIPED_H || s === SPECIAL.STRIPED_V;
 
     const sA = ca.special, sB = cb.special;
-
     if (sA === SPECIAL.BOMB && sB === SPECIAL.BOMB) {
-      for (let r = 0; r < rows; r++) addRow(r); // 清空全場
+      for (let r = 0; r < rows; r++) addRow(r);
     } else if (sA === SPECIAL.BOMB || sB === SPECIAL.BOMB) {
       const other = sA === SPECIAL.BOMB ? cb : ca;
       const otherPos = sA === SPECIAL.BOMB ? b : a;
@@ -356,19 +403,22 @@ const Engine = (() => {
       const bothWrapped = sA === SPECIAL.WRAPPED && sB === SPECIAL.WRAPPED;
       if (bothStriped) { addRow(pr); addCol(pc); }
       else if (bothWrapped) { addBox(pr, pc, 2); }
-      else { for (let d = -1; d <= 1; d++) { addRow(pr + d); addCol(pc + d); } } // 條紋+包裝
+      else { for (let d = -1; d <= 1; d++) { addRow(pr + d); addCol(pc + d); } }
       addKey(a.r, a.c); addKey(b.r, b.c);
     }
 
     const baseCells = [...posSet].map(s => { const [r, c] = s.split(',').map(Number); return { r, c }; });
     const res = executeClears(state, baseCells, 1, null);
-    res.score += 500; // 組合技額外加分
-    applyGravity(state);
+    res.score += 500;
+    const collected = settle(state);
     state.cascade = 2;
-    return { anyMatch: true, cleared: res.cleared, score: res.score, jellyCleared: res.jellyCleared, specialsCreated: [] };
+    return {
+      anyMatch: true, cleared: res.cleared, score: res.score,
+      jellyCleared: res.jellyCleared, brokenIcing: res.brokenIcing,
+      specialsCreated: [], collected,
+    };
   }
 
-  /* 是否還有可消的合法步 */
   function hasValidMove(state) {
     const { rows, cols, grid } = state;
     for (let r = 0; r < rows; r++) {
@@ -376,6 +426,7 @@ const Engine = (() => {
         for (const [nr, nc] of [[r, c + 1], [r + 1, c]]) {
           if (nr >= rows || nc >= cols) continue;
           if (!grid[r][c] || !grid[nr][nc]) continue;
+          if (grid[r][c].ingredient || grid[nr][nc].ingredient) continue;
           const a = { r, c }, b = { r: nr, c: nc };
           swapInGrid(state, a, b);
           const ok = isComboSwap(state, a, b) || !!findMatches(state);
@@ -387,35 +438,36 @@ const Engine = (() => {
     return false;
   }
 
-  /* 重洗：保留現有糖果重新排列直到有合法步且無立即配對 */
   function reshuffle(state) {
-    const flat = [];
+    const cells = [], positions = [];
     for (let r = 0; r < state.rows; r++)
-      for (let c = 0; c < state.cols; c++) if (state.grid[r][c]) flat.push(state.grid[r][c]);
+      for (let c = 0; c < state.cols; c++) {
+        const g = state.grid[r][c];
+        if (g && !g.ingredient) { cells.push(g); positions.push({ r, c }); }
+      }
     let guard = 0;
     do {
-      for (let i = flat.length - 1; i > 0; i--) {
+      for (let i = cells.length - 1; i > 0; i--) {
         const j = randInt(i + 1);
-        [flat[i], flat[j]] = [flat[j], flat[i]];
+        [cells[i], cells[j]] = [cells[j], cells[i]];
       }
-      let idx = 0;
-      for (let r = 0; r < state.rows; r++)
-        for (let c = 0; c < state.cols; c++) state.grid[r][c] = flat[idx++];
+      for (let i = 0; i < positions.length; i++) state.grid[positions[i].r][positions[i].c] = cells[i];
       guard++;
-    } while (guard < 60 && (findMatches(state) || !hasValidMove(state)));
+    } while (guard < 80 && (findMatches(state) || !hasValidMove(state)));
   }
 
   function removeAt(state, r, c) {
     const cell = state.grid[r][c];
-    if (!cell) return null;
+    if (!cell || cell.ingredient) return null;
     if (state.jelly[r][c] > 0) state.jelly[r][c]--;
     state.grid[r][c] = null;
-    applyGravity(state);
-    return cell;
+    const collected = settle(state);
+    return { removed: cell, collected };
   }
 
   return {
-    SPECIAL, makeCell, createBoard, newState, findMatches, step,
-    swapInGrid, isComboSwap, applyCombo, hasValidMove, reshuffle, removeAt,
+    SPECIAL, makeCell, makeIngredient, makeEmptyState, fillCandies,
+    findMatches, step, swapInGrid, isComboSwap, applyCombo,
+    hasValidMove, reshuffle, removeAt, passable,
   };
 })();

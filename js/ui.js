@@ -3,7 +3,7 @@
  * ========================================================================= */
 
 const UI = (() => {
-  const FRUIT = ['🍓', '🍊', '🍋', '🍏', '🍬', '🍇'];
+  const FRUIT = ['🍓', '🍊', '🍌', '🍏', '🥥', '🍇'];
   const SWAP_MS = 180, CLEAR_MS = 230, FALL_MS = 280;
 
   let CELL = 56;
@@ -64,11 +64,13 @@ const UI = (() => {
       const stars = save.stars[lv.id] || 0;
       const node = document.createElement('div');
       node.className = 'map-node' + (unlocked ? '' : ' locked');
-      const goal = lv.type === 'score' ? `目標 ${lv.target}` : '清除果凍';
+      const typeLabel = lv.type === 'score' ? '🎯 分數關' : lv.type === 'ingredient' ? '🌰 食材關' : '🟦 果凍關';
+      const goal = lv.type === 'score' ? `目標 ${lv.target}` : lv.type === 'ingredient' ? `收集 ${lv.ingredients} 個` : '清除果凍';
+      const obst = (lv.icing ? ' 🧊' : '') + (lv.holes ? ' 🕳️' : '');
       node.innerHTML = `
         <div class="map-num">${lv.id}</div>
         <div class="map-info">
-          <div class="map-type">${lv.type === 'score' ? '🎯 分數關' : '🟦 果凍關'}</div>
+          <div class="map-type">${typeLabel}${obst}</div>
           <div class="map-goal">${goal} · ${lv.moves} 步</div>
         </div>
         <div class="map-stars">${unlocked ? starHTML(stars) : '🔒'}</div>`;
@@ -87,9 +89,15 @@ const UI = (() => {
   function openPreLevel(lv) {
     pendingLevel = lv;
     $('pre-title').textContent = `第 ${lv.id} 關`;
-    $('pre-goal').innerHTML = lv.type === 'score'
-      ? `🎯 在 <b>${lv.moves}</b> 步內達到 <b>${lv.target}</b> 分`
-      : `🟦 在 <b>${lv.moves}</b> 步內清除所有果凍`;
+    let goal;
+    if (lv.type === 'score') goal = `🎯 在 <b>${lv.moves}</b> 步內達到 <b>${lv.target}</b> 分`;
+    else if (lv.type === 'ingredient') goal = `🌰 在 <b>${lv.moves}</b> 步內收集 <b>${lv.ingredients}</b> 個食材`;
+    else goal = `🟦 在 <b>${lv.moves}</b> 步內清除所有果凍`;
+    const tips = [];
+    if (lv.icing) tips.push('🧊 有糖霜（消旁邊打破）');
+    if (lv.holes) tips.push('🕳️ 造型棋盤');
+    if (tips.length) goal += `<br><span class="pre-tip">${tips.join('　')}</span>`;
+    $('pre-goal').innerHTML = goal;
     showScreen('pre');
   }
 
@@ -128,13 +136,14 @@ const UI = (() => {
     for (let r = 0; r < st.rows; r++) {
       for (let c = 0; c < st.cols; c++) {
         const slot = document.createElement('div');
-        slot.className = 'slot' + ((r + c) % 2 ? ' alt' : '');
+        slot.className = 'slot' + ((r + c) % 2 ? ' alt' : '') + (st.blocked[r][c] ? ' hole' : '');
         slot.style.transform = `translate(${c * CELL}px, ${r * CELL}px)`;
         slot.dataset.k = r + '_' + c;
         jellyLayer.appendChild(slot);
       }
     }
     renderJelly();
+    renderObstacles();
 
     for (let r = 0; r < st.rows; r++) {
       for (let c = 0; c < st.cols; c++) {
@@ -160,6 +169,20 @@ const UI = (() => {
     }
   }
 
+  function renderObstacles() {
+    const st = Game.state;
+    for (let r = 0; r < st.rows; r++) {
+      for (let c = 0; c < st.cols; c++) {
+        const slot = jellyLayer.querySelector(`[data-k="${r}_${c}"]`);
+        if (!slot) continue;
+        slot.classList.remove('ice', 'ice1', 'ice2');
+        const n = st.blocker[r][c];
+        if (n === 1) slot.classList.add('ice', 'ice1');
+        else if (n >= 2) slot.classList.add('ice', 'ice2');
+      }
+    }
+  }
+
   /* ---------------- 糖果元素 ---------------- */
   function createCandyEl(cell) {
     const el = document.createElement('div');
@@ -172,6 +195,11 @@ const UI = (() => {
   }
   function applyCandyClass(el, cell) {
     const inner = el.querySelector('.ci');
+    if (cell.ingredient) {
+      inner.className = 'ci ingredient';
+      inner.innerHTML = '<span class="fruit">🌰</span>';
+      return;
+    }
     let cls = 'ci';
     if (cell.special === SPECIAL.BOMB) cls += ' bomb';
     else cls += ' t' + cell.type;
@@ -248,6 +276,7 @@ const UI = (() => {
   async function attemptSwap(a, b) {
     if (busy || !adjacent(a, b)) return;
     if (!getCellAt(a.r, a.c) || !getCellAt(b.r, b.c)) return;
+    if (getCellAt(a.r, a.c).ingredient || getCellAt(b.r, b.c).ingredient) { toast('食材不能交換，把它消到底部'); return; }
     busy = true;
     clearSelectHL(); selected = null;
 
@@ -305,17 +334,19 @@ const UI = (() => {
         if (rec) { applyCandyClass(rec.el, rec.cell); rec.el.classList.add('pop'); }
       }
     }
-    // 清除動畫
-    for (const c of res.cleared) {
+    // 清除 + 食材收集動畫
+    const gone = (res.cleared || []).concat(res.collected || []);
+    for (const c of gone) {
       const rec = elById.get(c.id);
       if (rec) rec.el.classList.add('clearing');
     }
     await wait(CLEAR_MS);
-    for (const c of res.cleared) {
+    for (const c of gone) {
       const rec = elById.get(c.id);
       if (rec) { rec.el.remove(); elById.delete(c.id); }
     }
     renderJelly();
+    renderObstacles();
     syncBoard();
     await wait(FALL_MS);
     for (const { el } of elById.values()) el.classList.remove('pop');
@@ -361,21 +392,23 @@ const UI = (() => {
   /* ---------------- 道具 ---------------- */
   async function doHammer(pos) {
     if (busy) return;
+    const cell = getCellAt(pos.r, pos.c);
+    if (!cell || cell.ingredient) { toast('這裡不能敲'); return; }
     if (!Store.useBooster('hammer')) { toast('鎚子數量不足'); setHammer(false); return; }
     busy = true; setHammer(false);
-    const cell = getCellAt(pos.r, pos.c);
-    if (cell) {
-      const rec = elById.get(cell.id);
-      if (rec) rec.el.classList.add('clearing');
-      Engine.removeAt(Game.state, pos.r, pos.c);
-      await wait(CLEAR_MS);
-      if (rec) { rec.el.remove(); elById.delete(cell.id); }
-      renderJelly(); syncBoard();
-      await wait(FALL_MS);
-      await resolveBoard(null);
-      updateHUD();
-      await afterMove();
-    }
+    const rec = elById.get(cell.id);
+    if (rec) rec.el.classList.add('clearing');
+    const r = Engine.removeAt(Game.state, pos.r, pos.c);
+    const collected = (r && r.collected) || [];
+    for (const g of collected) { const gr = elById.get(g.id); if (gr) gr.el.classList.add('clearing'); }
+    await wait(CLEAR_MS);
+    if (rec) { rec.el.remove(); elById.delete(cell.id); }
+    for (const g of collected) { const gr = elById.get(g.id); if (gr) { gr.el.remove(); elById.delete(g.id); } }
+    renderJelly(); renderObstacles(); syncBoard();
+    await wait(FALL_MS);
+    await resolveBoard(null);
+    updateHUD();
+    await afterMove();
     updateBoosterUI();
     busy = false;
   }
@@ -416,19 +449,15 @@ const UI = (() => {
     $('hud-score').textContent = Game.score;
     $('hud-moves').textContent = Game.moves;
     const g = Game.goalProgress();
-    if (g.type === 'score') {
-      $('hud-goal').innerHTML = `🎯 ${g.current} / <b>${g.target}</b>`;
-      $('goal-bar').style.width = Math.min(100, g.current / g.target * 100) + '%';
-    } else {
-      $('hud-goal').innerHTML = `🟦 果凍剩 <b>${g.current}</b>`;
-      const total = countJellyTotal();
-      $('goal-bar').style.width = (total ? (1 - g.current / total) * 100 : 100) + '%';
-    }
+    let txt = '', pct = 0;
+    if (g.type === 'score') { txt = `🎯 ${g.current} / <b>${g.target}</b>`; pct = g.current / g.target * 100; }
+    else if (g.type === 'ingredient') { txt = `🌰 ${g.current} / <b>${g.target}</b>`; pct = g.target ? g.current / g.target * 100 : 100; }
+    else { txt = `🟦 果凍剩 <b>${g.current}</b>`; pct = g.total ? (1 - g.current / g.total) * 100 : 100; }
+    $('hud-goal').innerHTML = txt;
+    $('goal-bar').style.width = Math.min(100, pct) + '%';
     updateBoosterUI();
     refreshResources();
   }
-  let _jellyTotal = 0;
-  function countJellyTotal() { return _jellyTotal || 1; }
 
   /* ---------------- 勝 / 負 ---------------- */
   function onWin() {
@@ -551,13 +580,6 @@ const UI = (() => {
     $('btn-win-map').addEventListener('click', () => { closeModals(); showScreen('map'); });
     $('btn-retry').addEventListener('click', () => { closeModals(); openPreLevel(Game.level); });
     $('btn-lose-map').addEventListener('click', () => { closeModals(); showScreen('map'); });
-
-    // 計算果凍總量時用：start 時記錄
-    const origStart = Game.start;
-    Game.start = function (lv) {
-      origStart(lv);
-      _jellyTotal = Game.jellyRemaining() || 0;
-    };
 
     lifeTimer = setInterval(refreshResources, 1000);
     showScreen('home');

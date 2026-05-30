@@ -3,34 +3,49 @@
  * ========================================================================= */
 
 /* ---------------- 關卡 ----------------
- * type: 'score' 分數關 / 'jelly' 果凍關
- * jelly 關用 jellyFill 決定哪些格子有果凍 ('full' 全部 / 'center' 中央區塊)
+ * type: 'score' 分數關 / 'jelly' 果凍關 / 'ingredient' 食材關
+ * 障礙物欄位：jelly{fill,layers}、icing{size,layers}、holes(形狀名)、ingredients(數量)
  */
 const LEVELS = (() => {
   const list = [];
-  const fills = ['center', 'ring', 'full'];
-
   for (let i = 1; i <= 100; i++) {
-    const rows = i >= 5 ? 9 : 8;       // 第 5 關起放大棋盤
-    const cols = rows;
-    const colors = i <= 3 ? 5 : 6;     // 前 3 關少一色比較好上手
-    const isJelly = (i % 3 === 0);     // 每 3 關一個果凍關
-    const lv = { id: i, rows, cols, colors };
+    const lv = { id: i };
+    lv.colors = i <= 2 ? 5 : 6;          // 前 2 關少一色好上手
+    const big = i >= 5;
+    lv.rows = big ? 9 : 8;               // 第 5 關起放大棋盤
+    lv.cols = lv.rows;
 
-    if (isJelly) {
-      lv.type = 'jelly';
+    // 類型：食材關（16 起每 6 關）優先，否則每 3 關果凍，其餘分數
+    let type = 'score';
+    if (i >= 16 && (i - 16) % 6 === 0) type = 'ingredient';
+    else if (i % 3 === 0) type = 'jelly';
+    lv.type = type;
+
+    if (type === 'score') {
+      lv.moves = Math.max(16, 26 - Math.floor(i / 12));
+      lv.target = Math.round(1800 + (i - 1) * 850 + i * i * 3);
+    } else if (type === 'jelly') {
       lv.moves = Math.max(18, 30 - Math.floor(i / 12));
-      lv.jellyFill = fills[(Math.floor(i / 3) - 1) % fills.length];
-      lv.jellyLayers = i >= 50 ? 2 : 1;  // 後段果凍兩層
-    } else {
-      lv.type = 'score';
-      lv.moves = Math.max(15, 26 - Math.floor(i / 10));
-      lv.target = Math.round(2000 + (i - 1) * 1100 + i * i * 4);
+      const fills = ['center', 'ring', 'full'];
+      lv.jelly = { fill: fills[Math.floor(i / 3) % 3], layers: i >= 50 ? 2 : 1 };
+    } else { // ingredient
+      lv.moves = Math.max(20, 34 - Math.floor(i / 14));
+      lv.ingredients = Math.min(8, 2 + Math.floor((i - 16) / 16));
+    }
+
+    // 🧊 糖霜：第 10 關起，區塊與層數逐步加大；食材關不放（避免擋住掉落路徑）
+    if (i >= 10 && type !== 'ingredient') {
+      lv.icing = { size: i < 22 ? 1 : i < 40 ? 2 : 3, layers: i >= 60 ? 2 : 1 };
+    }
+    // 🕳️ 造型棋盤：第 24 關起，形狀逐步複雜；食材關維持方形
+    if (type !== 'ingredient') {
+      if (i >= 70) lv.holes = (i % 2 ? 'octagon' : 'cross');
+      else if (i >= 46) lv.holes = 'corners2';
+      else if (i >= 24) lv.holes = 'corners1';
     }
     list.push(lv);
   }
 
-  // 每關星等門檻（分數）
   for (const lv of list) {
     const base = lv.type === 'score' ? lv.target : (3000 + lv.id * 120);
     lv.stars = [base, Math.round(base * 1.4), Math.round(base * 1.9)];
@@ -40,42 +55,76 @@ const LEVELS = (() => {
 
 function getLevel(id) { return LEVELS.find(l => l.id === id); }
 
-/* 依關卡設定產生果凍佈局 */
-function buildJelly(level, rows, cols) {
-  const jelly = Array.from({ length: rows }, () => new Array(cols).fill(0));
-  if (level.type !== 'jelly') return jelly;
-  const layers = level.jellyLayers || 1;
-  const fill = level.jellyFill || 'full';
+/* 果凍佈局 */
+function buildJelly(j, rows, cols) {
+  const g = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  if (!j) return g;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       let on = false;
-      if (fill === 'full') on = true;
-      else if (fill === 'center') on = (r >= 2 && r < rows - 2 && c >= 2 && c < cols - 2);
-      else if (fill === 'ring') on = (r < 2 || r >= rows - 2 || c < 2 || c >= cols - 2);
-      if (on) jelly[r][c] = layers;
+      if (j.fill === 'full') on = true;
+      else if (j.fill === 'center') on = (r >= 2 && r < rows - 2 && c >= 2 && c < cols - 2);
+      else if (j.fill === 'ring') on = (r < 2 || r >= rows - 2 || c < 2 || c >= cols - 2);
+      if (on) g[r][c] = j.layers || 1;
     }
   }
-  return jelly;
+  return g;
+}
+
+/* 🧊 糖霜佈局：在棋盤上方中央放一塊，依 size 變大 */
+function buildIcing(ic, rows, cols) {
+  const g = Array.from({ length: rows }, () => new Array(cols).fill(0));
+  if (!ic) return g;
+  const w = ic.size + 1, h = ic.size;        // size1→2×1, size2→3×2, size3→4×3
+  const startCol = Math.max(0, Math.floor((cols - w) / 2));
+  const startRow = 1;
+  for (let r = startRow; r < startRow + h && r < rows; r++)
+    for (let c = startCol; c < startCol + w && c < cols; c++)
+      g[r][c] = ic.layers || 1;
+  return g;
+}
+
+/* 🕳️ 造型棋盤：回傳 blocked（true=空洞） */
+function buildHoles(shape, rows, cols) {
+  const g = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  if (!shape) return g;
+  const cutCorners = (k) => {
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        if (r + c < k || r + (cols - 1 - c) < k ||
+            (rows - 1 - r) + c < k || (rows - 1 - r) + (cols - 1 - c) < k) g[r][c] = true;
+  };
+  if (shape === 'corners1') cutCorners(1);
+  else if (shape === 'corners2') cutCorners(2);
+  else if (shape === 'octagon') cutCorners(3);
+  else if (shape === 'cross') {
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++)
+        if ((r < 2 && c < 2) || (r < 2 && c >= cols - 2) ||
+            (r >= rows - 2 && c < 2) || (r >= rows - 2 && c >= cols - 2)) g[r][c] = true;
+  }
+  return g;
 }
 
 /* ---------------- 密碼表 ----------------
  * 取代課金：輸入密碼即可解鎖內容。大小寫不拘。
  */
 const CODES = {
-  'SWEET':     { type: 'coins', amount: 500, desc: '+500 金幣' },
-  'CANDY1000': { type: 'coins', amount: 1000, once: true, desc: '+1000 金幣（限一次）' },
-  'BOOST':     { type: 'boosters', grant: { hammer: 5, shuffle: 5, moves: 5 }, desc: '道具 +5（鎚子/重洗/加步數）' },
-  'LIFE':      { type: 'flag', flag: 'infiniteLives', desc: '解鎖無限生命' },
-  'RICH':      { type: 'flag', flag: 'infiniteCoins', desc: '解鎖無限金幣' },
-  'UNLOCK':    { type: 'flag', flag: 'unlockAll', desc: '解鎖全部關卡' },
-  'PREMIUM':   { type: 'flag', flag: 'premium', desc: '去廣告 + 解鎖全部付費內容' },
-  'NOADS':     { type: 'flag', flag: 'premium', desc: '去廣告 + 解鎖全部付費內容' },
-  'MASTER':    { type: 'master', desc: '大師密碼：一次解鎖全部' },
+  'SWEET31':   { type: 'coins', amount: 3000, desc: '+3000 金幣' },
+  'SWEET52':   { type: 'coins', amount: 5000, desc: '+5000 金幣' },
+  'SWEET99':   { type: 'coins', amount: 10000, desc: '+10000 金幣' },
+  'BOOST15':   { type: 'boosters', grant: { hammer: 5, shuffle: 5, moves: 5 }, desc: '道具 +5（鎚子/重洗/加步數）' },
+  'LIFE73':    { type: 'flag', flag: 'infiniteLives', desc: '解鎖無限生命' },
+  'RICH64':    { type: 'flag', flag: 'infiniteCoins', desc: '解鎖無限金幣' },
+  'UNLOCK39':  { type: 'flag', flag: 'unlockAll', desc: '解鎖全部關卡' },
+  'PREMIUM56': { type: 'flag', flag: 'premium', desc: '去廣告 + 解鎖全部付費內容' },
+  'NOADS56':   { type: 'flag', flag: 'premium', desc: '去廣告 + 解鎖全部付費內容' },
+  'MASTER91':  { type: 'master', desc: '大師密碼：一次解鎖全部' },
 };
 
 /* in-game 專用密碼（遊戲中輸入才有效） */
 const INGAME_CODES = {
-  'MOVES': { type: 'add_moves', amount: 5, desc: '當前關卡 +5 步' },
+  'MOVES48': { type: 'add_moves', amount: 5, desc: '當前關卡 +5 步' },
 };
 
 /* ---------------- 存檔 ---------------- */
