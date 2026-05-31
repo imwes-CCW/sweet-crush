@@ -2,142 +2,53 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>糖果繽紛樂 Sweet Crush</title>
-  <link rel="stylesheet" href="css/style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的小程式集</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+      background: linear-gradient(160deg, #2b1055, #7597de);
+      color: #fff; min-height: 100vh; padding: 40px 20px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    h1 {
+      font-size: 34px; text-align: center; margin-bottom: 6px;
+      text-shadow: 0 3px 12px rgba(0,0,0,.4);
+    }
+    .sub { text-align: center; opacity: .8; margin-bottom: 32px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .card {
+      display: flex; flex-direction: column; gap: 6px;
+      background: rgba(255,255,255,.14); border-radius: 18px; padding: 20px;
+      text-decoration: none; color: #fff; transition: transform .12s, background .2s;
+      box-shadow: 0 4px 0 rgba(0,0,0,.2);
+    }
+    .card:hover { transform: translateY(-3px); background: rgba(255,255,255,.22); }
+    .card .emoji { font-size: 40px; }
+    .card .name { font-size: 19px; font-weight: 800; }
+    .card .desc { font-size: 13px; opacity: .8; }
+    .card.soon { opacity: .45; cursor: default; pointer-events: none; }
+    footer { text-align: center; opacity: .6; font-size: 12px; margin-top: 36px; }
+  </style>
 </head>
 <body>
-  <div id="app">
-
-    <!-- ===== 首頁 ===== -->
-    <section id="screen-home" class="screen active">
-      <div class="home-inner">
-        <h1 class="logo">糖果<br>繽紛樂</h1>
-        <p class="subtitle">Sweet Crush · 單機版</p>
-        <button id="btn-play" class="btn big">▶ 開始遊戲</button>
-        <button id="btn-home-shop" class="btn ghost">🛒 商店</button>
-        <button id="btn-home-code" class="btn ghost">🔑 密碼模式</button>
-        <button id="btn-how" class="btn ghost">❓ 玩法說明</button>
-        <div class="res-bar home-res">
-          <span>❤️ <b class="res-lives">5/5</b><span class="res-life-timer"></span></span>
-          <span>💰 <b class="res-coins">100</b></span>
-        </div>
+  <div class="wrap">
+    <h1>🧩 我的小程式集</h1>
+    <p class="sub">點選下方卡片開始</p>
+    <div class="grid">
+      <a class="card" href="sweet-crush/index.html">
+        <span class="emoji">🍓</span>
+        <span class="name">糖果繽紛樂</span>
+        <span class="desc">單機三消遊戲 · 100 關</span>
+      </a>
+      <div class="card soon">
+        <span class="emoji">➕</span>
+        <span class="name">下一個程式</span>
+        <span class="desc">敬請期待</span>
       </div>
-    </section>
-
-    <!-- ===== 關卡地圖 ===== -->
-    <section id="screen-map" class="screen">
-      <header class="topbar">
-        <button id="btn-map-back" class="btn icon">←</button>
-        <div class="res-bar">
-          <span>❤️ <b class="res-lives">5/5</b><span class="res-life-timer"></span></span>
-          <span>💰 <b class="res-coins">100</b></span>
-        </div>
-        <div class="topbar-actions">
-          <button id="btn-map-shop" class="btn icon">🛒</button>
-          <button id="btn-map-code" class="btn icon">🔑</button>
-        </div>
-      </header>
-      <h2 class="screen-title">選擇關卡</h2>
-      <div id="map-list" class="map-list"></div>
-    </section>
-
-    <!-- ===== 開始前 ===== -->
-    <section id="screen-pre" class="screen">
-      <div class="pre-card">
-        <h2 id="pre-title">第 1 關</h2>
-        <p id="pre-goal" class="pre-goal"></p>
-        <button id="btn-pre-start" class="btn big">開始！</button>
-        <button id="btn-pre-back" class="btn ghost">返回</button>
-      </div>
-    </section>
-
-    <!-- ===== 遊戲畫面 ===== -->
-    <section id="screen-game" class="screen">
-      <header class="topbar game-top">
-        <button id="btn-game-back" class="btn icon">←</button>
-        <div class="hud-block"><span class="hud-label">分數</span><span id="hud-score" class="hud-val">0</span></div>
-        <div class="hud-block"><span class="hud-label">步數</span><span id="hud-moves" class="hud-val">0</span></div>
-        <button id="btn-game-code" class="btn icon">🔑</button>
-      </header>
-
-      <div class="goal-row">
-        <div id="hud-goal" class="hud-goal"></div>
-        <div class="goal-track"><div id="goal-bar" class="goal-bar"></div></div>
-      </div>
-
-      <div class="board-wrap">
-        <div id="board" class="board"></div>
-      </div>
-
-      <div class="booster-bar">
-        <button id="btn-hammer" class="booster"><span class="b-ico">🔨</span><span id="cnt-hammer" class="b-cnt">0</span></button>
-        <button id="btn-shuffle" class="booster"><span class="b-ico">🔀</span><span id="cnt-shuffle" class="b-cnt">0</span></button>
-        <button id="btn-moves" class="booster"><span class="b-ico">➕</span><span id="cnt-moves" class="b-cnt">0</span></button>
-      </div>
-    </section>
-
-    <!-- ===== 彈窗 ===== -->
-    <div id="modal-overlay" class="overlay"></div>
-
-    <div id="modal-win" class="modal">
-      <h2>🎉 過關！</h2>
-      <div id="win-stars" class="big-stars"></div>
-      <p>分數：<b id="win-score">0</b></p>
-      <p>獲得金幣：<b id="win-coins">+0</b></p>
-      <button id="btn-next" class="btn big">下一關 ▶</button>
-      <button id="btn-win-map" class="btn ghost">關卡地圖</button>
     </div>
-
-    <div id="modal-lose" class="modal">
-      <h2>😢 失敗了</h2>
-      <p id="lose-reason"></p>
-      <p>分數：<b id="lose-score">0</b></p>
-      <button id="btn-retry" class="btn big">重玩</button>
-      <button id="btn-lose-map" class="btn ghost">關卡地圖</button>
-    </div>
-
-    <div id="modal-code" class="modal">
-      <h2>🔑 密碼模式</h2>
-      <p class="modal-sub">輸入密碼解鎖內容（取代課金）</p>
-      <input id="code-input" class="code-input" type="text" placeholder="輸入密碼…" autocomplete="off">
-      <button id="btn-code-redeem" class="btn big">兌換</button>
-      <div id="code-result" class="code-result"></div>
-      <button class="btn ghost" data-close>關閉</button>
-    </div>
-
-    <div id="modal-shop" class="modal">
-      <h2>🛒 商店</h2>
-      <p class="modal-sub">用金幣購買道具</p>
-      <div id="shop-list" class="shop-list"></div>
-      <div class="res-bar"><span>目前金幣：💰 <b class="res-coins">0</b></span></div>
-      <button class="btn ghost" data-close>關閉</button>
-    </div>
-
-    <div id="modal-help" class="modal">
-      <h2>❓ 玩法說明</h2>
-      <div class="help-body">
-        <p>🔄 <b>交換</b>相鄰糖果，湊成 3 顆以上同色即可消除。</p>
-        <p>🍬 消除 <b>4 顆</b>一線 → <b>條紋糖</b>（清整行/整列）。</p>
-        <p>✨ 消除 <b>L / T 形</b> → <b>包裝糖</b>（炸 3×3）。</p>
-        <p>🌈 消除 <b>5 顆</b>一線 → <b>彩色炸彈</b>（清除同色全部）。</p>
-        <p>💥 兩顆特殊糖<b>互相交換</b>會觸發更強組合技！</p>
-        <p>🎯 分數關：步數內達標。🟦 果凍關：清光所有果凍格。</p>
-        <p>🌰 食材關：把食材消到棋盤<b>最底部</b>收集（食材不能交換、不會被消除）。</p>
-        <p>🧊 糖霜：擋住格子，<b>消除它旁邊</b>的糖果就能一層層打破。</p>
-        <p>🕳️ 造型棋盤：後段關卡盤面不是方形，會有空洞。</p>
-        <p>🔑 想要道具或解鎖內容？到「密碼模式」輸入密碼。</p>
-      </div>
-      <button class="btn ghost" data-close>知道了</button>
-    </div>
-
-    <div id="toast" class="toast"></div>
+    <footer>Made with Claude Code</footer>
   </div>
-
-  <script src="js/engine.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/game.js"></script>
-  <script src="js/ui.js"></script>
-  <script src="js/main.js"></script>
 </body>
 </html>
