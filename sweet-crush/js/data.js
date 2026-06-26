@@ -8,46 +8,74 @@
  */
 const LEVELS = (() => {
   const list = [];
-  for (let i = 1; i <= 100; i++) {
+
+  // 類型節奏：以 12 關為一輪穿插分數/果凍/食材，避免單調
+  // 果凍第 4 關後才登場、食材第 12 關後才登場；未解鎖時退回分數關
+  const TYPE_CYCLE = ['score', 'jelly', 'score', 'score', 'jelly', 'ingredient',
+                      'score', 'jelly', 'score', 'ingredient', 'score', 'jelly'];
+  function pickType(i) {
+    if (i % 25 === 0) return 'score';                    // 每 25 關「關主關」固定分數關
+    let t = TYPE_CYCLE[(i - 1) % TYPE_CYCLE.length];
+    if (t === 'jelly' && i < 4) t = 'score';
+    if (t === 'ingredient' && i < 12) t = 'score';
+    return t;
+  }
+
+  for (let i = 1; i <= 200; i++) {
     const lv = { id: i };
-    lv.colors = i <= 2 ? 5 : 6;          // 前 2 關少一色好上手
-    const big = i >= 5;
-    lv.rows = big ? 9 : 8;               // 第 5 關起放大棋盤
+    lv.colors = i <= 3 ? 5 : 6;          // 前 3 關少一色好上手
+    lv.rows = i <= 4 ? 8 : 9;            // 第 5 關起放大棋盤
     lv.cols = lv.rows;
+    const boss = (i % 25 === 0);
+    lv.type = pickType(i);
 
-    // 類型：食材關（16 起每 6 關）優先，否則每 3 關果凍，其餘分數
-    let type = 'score';
-    if (i >= 16 && (i - 16) % 6 === 0) type = 'ingredient';
-    else if (i % 3 === 0) type = 'jelly';
-    lv.type = type;
-
-    if (type === 'score') {
-      lv.moves = Math.max(16, 26 - Math.floor(i / 12));
-      lv.target = Math.round(1800 + (i - 1) * 850 + i * i * 3);
-    } else if (type === 'jelly') {
-      lv.moves = Math.max(18, 30 - Math.floor(i / 12));
+    // ---- 目標 / 步數：平緩曲線（每步需求分數 73 → 750，全程可達）----
+    if (lv.type === 'score') {
+      lv.moves = 22 + Math.floor(i / 25);                // 22 → 30
+      // 每步需求分數：第 1→50 關由 130 爬升到 800，之後在 600~1000 間波動保持挑戰
+      let perMove;
+      if (i <= 50) {
+        perMove = Math.round(130 + (i - 1) * 13.67);     // 130 → 800
+      } else {
+        const center = 800 + Math.min(120, Math.floor((i - 50) / 3)); // 800 → 920
+        const wave = [0, 150, -120, 80, -180, 120, -60][i % 7];       // 逐關起伏，避免單調
+        perMove = Math.max(600, Math.min(1000, center + wave));
+      }
+      lv.target = Math.round(lv.moves * perMove) + (boss ? 1500 : 0);
+    } else if (lv.type === 'jelly') {
+      lv.moves = 24 + Math.floor(i / 25);
       const fills = ['center', 'ring', 'full'];
-      lv.jelly = { fill: fills[Math.floor(i / 3) % 3], layers: i >= 50 ? 2 : 1 };
+      lv.jelly = { fill: fills[Math.floor(i / 4) % 3], layers: (i >= 90 && i % 2 === 0) ? 2 : 1 };
     } else { // ingredient
-      lv.moves = Math.max(20, 34 - Math.floor(i / 14));
-      lv.ingredients = Math.min(8, 2 + Math.floor((i - 16) / 16));
+      lv.moves = 26 + Math.floor(i / 30);
+      lv.ingredients = Math.min(9, 2 + Math.floor(i / 30));
     }
 
-    // 🧊 糖霜：第 10 關起，區塊與層數逐步加大；食材關不放（避免擋住掉落路徑）
-    if (i >= 10 && type !== 'ingredient') {
-      lv.icing = { size: i < 22 ? 1 : i < 40 ? 2 : 3, layers: i >= 60 ? 2 : 1 };
+    // ---- 障礙物：解鎖後「間隔出現」，刻意留乾淨棋盤保持新鮮 ----
+    // 🧊 糖霜：第 15 關解鎖；3 關出現、2 關休息；食材關不放（避免擋住掉落路徑）
+    if (i >= 15 && lv.type !== 'ingredient' && (i % 5) < 3) {
+      const size = i < 45 ? 1 : i < 95 ? 2 : 3;
+      lv.icing = { size, layers: (i >= 130 && i % 3 === 0) ? 2 : 1 };
     }
-    // 🕳️ 造型棋盤：第 24 關起，形狀逐步複雜；食材關維持方形
-    if (type !== 'ingredient') {
-      if (i >= 70) lv.holes = (i % 2 ? 'octagon' : 'cross');
-      else if (i >= 46) lv.holes = 'corners2';
-      else if (i >= 24) lv.holes = 'corners1';
+    // 🕳️ 造型棋盤：第 30 關解鎖；交錯出現，形狀隨進度輪替；食材關維持方形
+    if (i >= 30 && lv.type !== 'ingredient' && (Math.floor(i / 4) % 2 === 1)) {
+      const shapes = ['corners1', 'corners2', 'octagon', 'cross', 'diamond'];
+      const pool = i < 60 ? shapes.slice(0, 2)
+                 : i < 110 ? shapes.slice(0, 4)
+                 : shapes;
+      lv.holes = pool[i % pool.length];
+    }
+    // 關主關：強制疊加障礙增加挑戰（食材關除外）
+    if (boss && lv.type !== 'ingredient') {
+      lv.icing = lv.icing || { size: i < 95 ? 2 : 3, layers: 1 };
+      lv.holes = lv.holes || 'octagon';
     }
     list.push(lv);
   }
 
+  // ---- 星等門檻 ----
   for (const lv of list) {
-    const base = lv.type === 'score' ? lv.target : (3000 + lv.id * 120);
+    const base = lv.type === 'score' ? lv.target : (2500 + lv.id * 90);
     lv.stars = [base, Math.round(base * 1.4), Math.round(base * 1.9)];
   }
   return list;
@@ -97,6 +125,7 @@ function buildHoles(shape, rows, cols) {
   if (shape === 'corners1') cutCorners(1);
   else if (shape === 'corners2') cutCorners(2);
   else if (shape === 'octagon') cutCorners(3);
+  else if (shape === 'diamond') cutCorners(4);
   else if (shape === 'cross') {
     for (let r = 0; r < rows; r++)
       for (let c = 0; c < cols; c++)
@@ -120,6 +149,12 @@ const CODES = {
   'PREMIUM56': { type: 'flag', flag: 'premium', desc: '去廣告 + 解鎖全部付費內容' },
   'NOADS56':   { type: 'flag', flag: 'premium', desc: '去廣告 + 解鎖全部付費內容' },
   'MASTER91':  { type: 'master', desc: '大師密碼：一次解鎖全部' },
+
+  /* 🎁 一次性密碼（每個帳號只能兌換一次） */
+  'WELCOME':   { once: true, type: 'boosters', grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '新手禮包：道具各 +30（限用一次）' },
+  'SWEET200':  { once: true, type: 'boosters', grant: { hammer: 50, shuffle: 50, moves: 50 }, desc: '200 關慶祝包：道具各 +50（限用一次）' },
+  'STARTER':   { once: true, type: 'coins', amount: 50000, desc: '+50000 金幣（限用一次）' },
+  'GIFT888':   { once: true, type: 'coins', amount: 88888, desc: '+88888 金幣（限用一次）' },
 };
 
 /* in-game 專用密碼（遊戲中輸入才有效） */
