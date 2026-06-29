@@ -27,7 +27,31 @@ const Game = (() => {
     for (const c of new Set(picked)) st.grid[0][c] = Engine.makeIngredient();
   }
 
+  /* 🎲 魔王關：每次挑戰隨機重骰目標與障礙（不污染 LEVELS 原始資料） */
+  function rollBossLevel(base) {
+    const r = Math.random;
+    const lv = { ...base };
+    const roll = Math.floor(r() * 3);            // 0 高分 / 1 果凍 / 2 食材
+    delete lv.jelly; delete lv.icing; delete lv.holes; delete lv.ingredients;
+    if (roll === 1) {
+      lv.type = 'jelly';
+      lv.jelly = { fill: ['center', 'ring', 'full'][Math.floor(r() * 3)], layers: 2 + Math.floor(r() * 2) };
+    } else if (roll === 2) {
+      lv.type = 'ingredient';
+      lv.ingredients = 6 + Math.floor(r() * 6);  // 6~11（食材關保持方盤，不加障礙）
+      return lv;
+    } else {
+      lv.type = 'score';
+      lv.target = Math.round(base.target * (0.9 + r() * 0.24)); // 原目標 ±12% 浮動
+    }
+    // 額外隨機障礙（食材關除外）
+    if (r() < 0.6) lv.icing = { size: 2 + Math.floor(r() * 2), layers: 1 + Math.floor(r() * 2) };
+    if (r() < 0.5) lv.holes = ['octagon', 'cross', 'diamond', 'corners2'][Math.floor(r() * 4)];
+    return lv;
+  }
+
   function start(lv) {
+    if (lv.boss) lv = rollBossLevel(lv);
     level = lv;
     const { rows, cols, colors } = lv;
     state = Engine.makeEmptyState(rows, cols, colors);

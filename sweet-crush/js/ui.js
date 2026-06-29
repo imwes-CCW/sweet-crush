@@ -64,9 +64,11 @@ const UI = (() => {
       const stars = save.stars[lv.id] || 0;
       const node = document.createElement('div');
       node.className = 'map-node' + (unlocked ? '' : ' locked');
-      const typeLabel = lv.type === 'score' ? '🎯 分數關' : lv.type === 'ingredient' ? '🌰 食材關' : '🟦 果凍關';
-      const goal = lv.type === 'score' ? `目標 ${lv.target}` : lv.type === 'ingredient' ? `收集 ${lv.ingredients} 個` : '清除果凍';
-      const obst = (lv.icing ? ' 🧊' : '') + (lv.holes ? ' 🕳️' : '');
+      const typeLabel = lv.boss ? '👑 魔王關'
+        : lv.type === 'score' ? '🎯 分數關' : lv.type === 'ingredient' ? '🌰 食材關' : '🟦 果凍關';
+      const goal = lv.boss ? '❓ 每次隨機'
+        : lv.type === 'score' ? `目標 ${lv.target}` : lv.type === 'ingredient' ? `收集 ${lv.ingredients} 個` : '清除果凍';
+      const obst = lv.boss ? ' 🎲' : (lv.icing ? ' 🧊' : '') + (lv.holes ? ' 🕳️' : '');
       node.innerHTML = `
         <div class="map-num">${lv.id}</div>
         <div class="map-info">
@@ -90,12 +92,13 @@ const UI = (() => {
     pendingLevel = lv;
     $('pre-title').textContent = `第 ${lv.id} 關`;
     let goal;
-    if (lv.type === 'score') goal = `🎯 在 <b>${lv.moves}</b> 步內達到 <b>${lv.target}</b> 分`;
+    if (lv.boss) goal = `👑 <b>魔王關</b>：目標與障礙 <b>每次挑戰隨機</b>，進場才揭曉！`;
+    else if (lv.type === 'score') goal = `🎯 在 <b>${lv.moves}</b> 步內達到 <b>${lv.target}</b> 分`;
     else if (lv.type === 'ingredient') goal = `🌰 在 <b>${lv.moves}</b> 步內收集 <b>${lv.ingredients}</b> 個食材`;
     else goal = `🟦 在 <b>${lv.moves}</b> 步內清除所有果凍`;
     const tips = [];
-    if (lv.icing) tips.push('🧊 有糖霜（消旁邊打破）');
-    if (lv.holes) tips.push('🕳️ 造型棋盤');
+    if (!lv.boss && lv.icing) tips.push('🧊 有糖霜（消旁邊打破）');
+    if (!lv.boss && lv.holes) tips.push('🕳️ 造型棋盤');
     if (tips.length) goal += `<br><span class="pre-tip">${tips.join('　')}</span>`;
     $('pre-goal').innerHTML = goal;
     showScreen('pre');
@@ -273,11 +276,13 @@ const UI = (() => {
   }
 
   /* ---------------- 交換 ---------------- */
+  let comboDepth = 0;   // 本步連鎖深度（給音效升音用）
   async function attemptSwap(a, b) {
     if (busy || !adjacent(a, b)) return;
     if (!getCellAt(a.r, a.c) || !getCellAt(b.r, b.c)) return;
     if (getCellAt(a.r, a.c).ingredient || getCellAt(b.r, b.c).ingredient) { toast('食材不能交換，把它消到底部'); return; }
     busy = true;
+    comboDepth = 0;
     clearSelectHL(); selected = null;
 
     const cellA = getCellAt(a.r, a.c), cellB = getCellAt(b.r, b.c);
@@ -292,6 +297,7 @@ const UI = (() => {
 
     if (!combo && !matched) {
       // 無效交換，換回去
+      Sound.fail();
       Engine.swapInGrid(Game.state, a, b);
       place(recA.el, a.r, a.c); place(recB.el, b.r, b.c);
       await wait(SWAP_MS);
@@ -301,6 +307,7 @@ const UI = (() => {
 
     Game.spendMove();
     if (combo) {
+      Sound.combo();
       const res = Engine.applyCombo(Game.state, a, b);
       Game.addScore(res.score);
       await animateStep(res);
@@ -327,6 +334,10 @@ const UI = (() => {
   }
 
   async function animateStep(res) {
+    // 音效：特殊糖生成、食材收集、消除（音高隨連鎖升高）
+    if (res.specialsCreated && res.specialsCreated.length) Sound.special();
+    if (res.collected && res.collected.length) Sound.collect();
+    if (res.cleared && res.cleared.length) Sound.clear(comboDepth++);
     // 生成的特殊糖：刷新外觀 + 彈跳
     if (res.specialsCreated) {
       for (const s of res.specialsCreated) {
@@ -396,6 +407,7 @@ const UI = (() => {
     if (!cell || cell.ingredient) { toast('這裡不能敲'); return; }
     if (!Store.useBooster('hammer')) { toast('鎚子數量不足'); setHammer(false); return; }
     busy = true; setHammer(false);
+    comboDepth = 0; Sound.booster();
     const rec = elById.get(cell.id);
     if (rec) rec.el.classList.add('clearing');
     const r = Engine.removeAt(Game.state, pos.r, pos.c);
@@ -421,6 +433,7 @@ const UI = (() => {
     if (busy || Game.status !== 'playing') return;
     if (!Store.useBooster('shuffle')) { toast('重洗道具不足'); return; }
     busy = true;
+    comboDepth = 0; Sound.booster();
     Engine.reshuffle(Game.state);
     syncBoard();
     await wait(FALL_MS);
@@ -431,6 +444,7 @@ const UI = (() => {
   function useExtraMoves() {
     if (Game.status !== 'playing') return;
     if (!Store.useBooster('moves')) { toast('加步數道具不足'); return; }
+    Sound.booster();
     Game.addMoves(5);
     updateHUD(); updateBoosterUI();
     toast('+5 步！');
@@ -461,6 +475,7 @@ const UI = (() => {
 
   /* ---------------- 勝 / 負 ---------------- */
   function onWin() {
+    Sound.win();
     const stars = Game.calcStars();
     const earned = 20 + stars * 15;
     Store.addCoins(earned);
@@ -473,6 +488,7 @@ const UI = (() => {
     openModal('modal-win');
   }
   function onLose() {
+    Sound.lose();
     Store.spendLife();
     $('lose-score').textContent = Game.score;
     const g = Game.goalProgress();
@@ -541,9 +557,24 @@ const UI = (() => {
     toast('購買成功！');
   }
 
+  /* ---------------- 音效靜音開關 ---------------- */
+  function toggleMute() {
+    const m = Sound.toggle();
+    updateMuteUI();
+    toast(m ? '🔇 音效已關閉' : '🔊 音效已開啟');
+  }
+  function updateMuteUI() {
+    for (const b of document.querySelectorAll('.btn-mute')) b.textContent = Sound.isMuted() ? '🔇' : '🔊';
+  }
+
   /* ---------------- 初始化 ---------------- */
   function init() {
     board = $('board');
+
+    // 音效：靜音鈕 + 首次手勢解鎖音訊（瀏覽器政策）
+    for (const b of document.querySelectorAll('.btn-mute')) b.addEventListener('click', toggleMute);
+    updateMuteUI();
+    window.addEventListener('pointerdown', () => Sound.unlock(), { once: true });
 
     // 首頁
     $('btn-play').addEventListener('click', () => showScreen('map'));

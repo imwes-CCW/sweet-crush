@@ -21,41 +21,36 @@ const LEVELS = (() => {
     return t;
   }
 
-  for (let i = 1; i <= 200; i++) {
+  for (let i = 1; i <= 400; i++) {
     const lv = { id: i };
     lv.colors = i <= 3 ? 5 : 6;          // 前 3 關少一色好上手
     lv.rows = i <= 4 ? 8 : 9;            // 第 5 關起放大棋盤
     lv.cols = lv.rows;
     const boss = (i % 25 === 0);
+    lv.boss = boss;                      // 魔王關：實際內容於開局隨機重骰（見 game.js）
     lv.type = pickType(i);
 
-    // ---- 目標 / 步數：平緩曲線（每步需求分數 73 → 750，全程可達）----
+    // ---- 步數 + 非分數目標 ----
     if (lv.type === 'score') {
       lv.moves = 22 + Math.floor(i / 25);                // 22 → 30
-      // 每步需求分數：第 1→50 關由 130 爬升到 800，之後在 600~1000 間波動保持挑戰
-      let perMove;
-      if (i <= 50) {
-        perMove = Math.round(130 + (i - 1) * 13.67);     // 130 → 800
-      } else {
-        const center = 800 + Math.min(120, Math.floor((i - 50) / 3)); // 800 → 920
-        const wave = [0, 150, -120, 80, -180, 120, -60][i % 7];       // 逐關起伏，避免單調
-        perMove = Math.max(600, Math.min(1000, center + wave));
-      }
-      lv.target = Math.round(lv.moves * perMove) + (boss ? 1500 : 0);
     } else if (lv.type === 'jelly') {
       lv.moves = 24 + Math.floor(i / 25);
       const fills = ['center', 'ring', 'full'];
-      lv.jelly = { fill: fills[Math.floor(i / 4) % 3], layers: (i >= 90 && i % 2 === 0) ? 2 : 1 };
+      // 201 關後果凍多層（2~3 層）大幅提升清除難度
+      const layers = i > 200 ? (i % 3 === 0 ? 3 : 2) : ((i >= 90 && i % 2 === 0) ? 2 : 1);
+      lv.jelly = { fill: fills[Math.floor(i / 4) % 3], layers };
     } else { // ingredient
       lv.moves = 26 + Math.floor(i / 30);
-      lv.ingredients = Math.min(9, 2 + Math.floor(i / 30));
+      lv.ingredients = Math.min(i > 200 ? 12 : 9, 2 + Math.floor(i / 30));
     }
 
     // ---- 障礙物：解鎖後「間隔出現」，刻意留乾淨棋盤保持新鮮 ----
     // 🧊 糖霜：第 15 關解鎖；3 關出現、2 關休息；食材關不放（避免擋住掉落路徑）
     if (i >= 15 && lv.type !== 'ingredient' && (i % 5) < 3) {
       const size = i < 45 ? 1 : i < 95 ? 2 : 3;
-      lv.icing = { size, layers: (i >= 130 && i % 3 === 0) ? 2 : 1 };
+      // 201 關後糖霜多層（2~3 層）；間隔出現的節奏不變
+      const layers = i > 200 ? (i % 4 === 0 ? 3 : 2) : ((i >= 130 && i % 3 === 0) ? 2 : 1);
+      lv.icing = { size, layers };
     }
     // 🕳️ 造型棋盤：第 30 關解鎖；交錯出現，形狀隨進度輪替；食材關維持方形
     if (i >= 30 && lv.type !== 'ingredient' && (Math.floor(i / 4) % 2 === 1)) {
@@ -69,6 +64,31 @@ const LEVELS = (() => {
     if (boss && lv.type !== 'ingredient') {
       lv.icing = lv.icing || { size: i < 95 ? 2 : 3, layers: 1 };
       lv.holes = lv.holes || 'octagon';
+    }
+
+    // ---- 分數關目標：依曲線算每步需求；「有阻礙」則壓到 600~800（難度改由障礙承擔）----
+    if (lv.type === 'score') {
+      // 每步需求分數：1→50 爬升到 800；51→200 在 600~1000 波動；201→400 專家區 1200~1500
+      let perMove;
+      if (i <= 50) {
+        perMove = Math.round(130 + (i - 1) * 13.67);     // 130 → 800
+      } else if (i <= 200) {
+        const center = 800 + Math.min(120, Math.floor((i - 50) / 3)); // 800 → 920
+        const wave = [0, 150, -120, 80, -180, 120, -60][i % 7];       // 逐關起伏，避免單調
+        perMove = Math.max(600, Math.min(1000, center + wave));
+      } else {
+        const center = 1230 + Math.round((i - 201) * (1500 - 1230) / 199); // 1230 → 1500
+        const wave = [0, 120, -90, 60, -120, 90, -60][i % 7];
+        perMove = Math.max(1200, Math.min(1500, center + wave));
+      }
+      // 有糖霜／造型棋盤 → 每步需求壓進 600~800（雙重或多層障礙再往 600 降；只降不升）
+      if (lv.icing || lv.holes) {
+        let cap = (lv.icing && lv.holes) ? 650 : 750;
+        if (lv.icing && lv.icing.layers >= 2) cap -= 50;
+        cap = Math.max(600, Math.min(800, cap));
+        perMove = Math.min(perMove, cap);
+      }
+      lv.target = Math.round(lv.moves * perMove) + (boss ? 1500 : 0);
     }
     list.push(lv);
   }
