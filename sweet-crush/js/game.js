@@ -11,8 +11,9 @@ const Game = (() => {
   let jellyTotal = 0;
   let ingredientGoal = 0;
 
+  // 在頂部數排挑「整欄到底都可通行」的欄位放食材；每排每欄最多一顆，
+  // 需求超過欄數時往下一排溢放。回傳「實際放置數」→ 呼叫端用它當目標，杜絕不可能關。
   function placeIngredients(st, count) {
-    // 在最上排挑選間隔均勻、可通行、整欄到底都可通行的欄位放食材
     const cols = st.cols, rows = st.rows;
     const usable = [];
     for (let c = 0; c < cols; c++) {
@@ -20,11 +21,20 @@ const Game = (() => {
       for (let r = 0; r < rows && ok; r++) if (!Engine.passable(st, r, c)) ok = false;
       if (ok) usable.push(c);
     }
-    if (usable.length === 0) return;
-    const picked = [];
-    const step = usable.length / count;
-    for (let k = 0; k < count; k++) picked.push(usable[Math.min(usable.length - 1, Math.floor(k * step))]);
-    for (const c of new Set(picked)) st.grid[0][c] = Engine.makeIngredient();
+    if (usable.length === 0) return 0;
+    let placed = 0;
+    for (let row = 0; row < rows - 1 && placed < count; row++) {
+      const n = Math.min(count - placed, usable.length);
+      const stepC = usable.length / n;
+      const cset = new Set();
+      for (let k = 0; k < n; k++) cset.add(usable[Math.min(usable.length - 1, Math.floor(k * stepC))]);
+      for (const c of cset) {
+        if (placed >= count) break;
+        st.grid[row][c] = Engine.makeIngredient();
+        placed++;
+      }
+    }
+    return placed;
   }
 
   /* 🎲 魔王關：每次挑戰隨機重骰目標與障礙（不污染 LEVELS 原始資料） */
@@ -67,9 +77,11 @@ const Game = (() => {
     do { Engine.fillCandies(state); guard++; }
     while (guard < 80 && (Engine.findMatches(state) || !Engine.hasValidMove(state)));
 
-    ingredientGoal = lv.ingredients || 0;
-    if (ingredientGoal > 0) placeIngredients(state, ingredientGoal);
+    // 以「實際放置數」為目標，保證任務數量絕不超過棋盤能放的食材數
+    ingredientGoal = (lv.ingredients || 0) > 0 ? placeIngredients(state, lv.ingredients) : 0;
     state.ingredientsCollected = 0;
+    // 放完食材若剛好破壞了唯一可走步，保底重洗（reshuffle 不會移動食材）
+    if (ingredientGoal > 0 && !Engine.hasValidMove(state)) Engine.reshuffle(state);
 
     jellyTotal = jellyRemaining();
     moves = lv.moves;

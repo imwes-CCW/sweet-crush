@@ -21,7 +21,7 @@ const LEVELS = (() => {
     return t;
   }
 
-  for (let i = 1; i <= 400; i++) {
+  for (let i = 1; i <= 800; i++) {
     const lv = { id: i };
     lv.colors = i <= 3 ? 5 : 6;          // 前 3 關少一色好上手
     lv.rows = i <= 4 ? 8 : 9;            // 第 5 關起放大棋盤
@@ -68,7 +68,8 @@ const LEVELS = (() => {
 
     // ---- 分數關目標：依曲線算每步需求；「有阻礙」則壓到 600~800（難度改由障礙承擔）----
     if (lv.type === 'score') {
-      // 每步需求分數：1→50 爬升到 800；51→200 在 600~1000 波動；201→400 專家區 1200~1500
+      // 每步需求分數：1→50 爬升到 800；51→200 在 600~1000 波動；
+      // 201 起進入專家區 1200~1500，並於 1500 封頂（401→800 難度不再增加、僅維持）
       let perMove;
       if (i <= 50) {
         perMove = Math.round(130 + (i - 1) * 13.67);     // 130 → 800
@@ -77,9 +78,9 @@ const LEVELS = (() => {
         const wave = [0, 150, -120, 80, -180, 120, -60][i % 7];       // 逐關起伏，避免單調
         perMove = Math.max(600, Math.min(1000, center + wave));
       } else {
-        const center = 1230 + Math.round((i - 201) * (1500 - 1230) / 199); // 1230 → 1500
+        const center = 1230 + Math.round((i - 201) * (1500 - 1230) / 199); // 1230 → 1500 後封頂
         const wave = [0, 120, -90, 60, -120, 90, -60][i % 7];
-        perMove = Math.max(1200, Math.min(1500, center + wave));
+        perMove = Math.max(1200, Math.min(1500, center + wave));       // 401+ 恆為 1500 區間
       }
       // 有糖霜／造型棋盤 → 每步需求壓進 600~800（雙重或多層障礙再往 600 降；只降不升）
       if (lv.icing || lv.holes) {
@@ -175,6 +176,9 @@ const CODES = {
   'SWEET200':  { once: true, type: 'boosters', grant: { hammer: 50, shuffle: 50, moves: 50 }, desc: '200 關慶祝包：道具各 +50（限用一次）' },
   'STARTER':   { once: true, type: 'coins', amount: 50000, desc: '+50000 金幣（限用一次）' },
   'GIFT888':   { once: true, type: 'coins', amount: 88888, desc: '+88888 金幣（限用一次）' },
+  'BUGFIX77':  { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
+  'BUGFIX88':  { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
+  'BUGFIX99':  { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
 };
 
 /* in-game 專用密碼（遊戲中輸入才有效） */
@@ -282,6 +286,7 @@ const Store = (() => {
 
     if (def.type === 'coins') addCoins(def.amount);
     else if (def.type === 'boosters') { for (const k in def.grant) addBooster(k, def.grant[k]); }
+    else if (def.type === 'bundle') { addCoins(def.amount); for (const k in def.grant) addBooster(k, def.grant[k]); }
     else if (def.type === 'flag') { data[def.flag] = true; save(); }
     else if (def.type === 'master') {
       data.infiniteLives = true; data.infiniteCoins = true;

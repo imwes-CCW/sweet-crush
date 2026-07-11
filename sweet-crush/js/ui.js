@@ -54,12 +54,36 @@ const UI = (() => {
     for (const el of document.querySelectorAll('.res-life-timer')) el.textContent = timerStr;
   }
 
-  /* ---------------- 關卡地圖 ---------------- */
+  /* ---------------- 關卡地圖（每 200 關一個分頁籤）---------------- */
+  const MAP_PAGE_SIZE = 200;
+  let mapPage = null;   // 首次進入時落在目前進度所在頁
+
   function buildMap() {
+    const totalPages = Math.ceil(LEVELS.length / MAP_PAGE_SIZE);
+    if (mapPage === null) mapPage = Math.floor((Store.get().maxLevel - 1) / MAP_PAGE_SIZE);
+    mapPage = Math.max(0, Math.min(totalPages - 1, mapPage));
+
+    // 分頁籤
+    const tabs = $('map-tabs');
+    tabs.innerHTML = '';
+    for (let p = 0; p < totalPages; p++) {
+      const from = p * MAP_PAGE_SIZE + 1;
+      const to = Math.min(LEVELS.length, (p + 1) * MAP_PAGE_SIZE);
+      const btn = document.createElement('button');
+      btn.className = 'map-tab' + (p === mapPage ? ' active' : '');
+      btn.textContent = `${from}–${to}`;
+      btn.addEventListener('click', () => { mapPage = p; buildMap(); });
+      tabs.appendChild(btn);
+    }
+
+    // 本頁關卡清單
     const wrap = $('map-list');
     wrap.innerHTML = '';
     const save = Store.get();
-    for (const lv of LEVELS) {
+    const start = mapPage * MAP_PAGE_SIZE;
+    const end = Math.min(LEVELS.length, start + MAP_PAGE_SIZE);
+    for (let idx = start; idx < end; idx++) {
+      const lv = LEVELS[idx];
       const unlocked = Store.isUnlocked(lv.id);
       const stars = save.stars[lv.id] || 0;
       const node = document.createElement('div');
@@ -79,6 +103,7 @@ const UI = (() => {
       if (unlocked) node.addEventListener('click', () => openPreLevel(lv));
       wrap.appendChild(node);
     }
+    wrap.scrollTop = 0;
   }
   function starHTML(n) {
     let s = '';
@@ -492,8 +517,9 @@ const UI = (() => {
     Store.spendLife();
     $('lose-score').textContent = Game.score;
     const g = Game.goalProgress();
-    $('lose-reason').textContent = g.type === 'score'
-      ? `差 ${Math.max(0, Game.level.target - Game.score)} 分達標`
+    $('lose-reason').textContent =
+      g.type === 'score' ? `差 ${Math.max(0, Game.level.target - Game.score)} 分達標`
+      : g.type === 'ingredient' ? `還差 ${Math.max(0, g.target - g.current)} 個食材`
       : `還剩 ${g.current} 格果凍`;
     refreshResources();
     openModal('modal-lose');

@@ -71,6 +71,21 @@ body {
 
 /* ---------- 關卡地圖 ---------- */
 .map-list { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 10px; padding-bottom: 30px; }
+.map-tabs {
+  width: 100%; max-width: 480px; display: flex; gap: 8px; flex-wrap: wrap;
+  justify-content: center; margin-bottom: 12px;
+}
+.map-tab {
+  flex: 1 1 auto; min-width: 72px; padding: 9px 10px; border: none; cursor: pointer;
+  font-family: inherit; font-weight: 800; font-size: 14px; color: #fff;
+  background: rgba(255,255,255,.16); border-radius: 12px;
+  box-shadow: 0 3px 0 rgba(0,0,0,.2); transition: transform .1s;
+}
+.map-tab:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,.2); }
+.map-tab.active {
+  background: linear-gradient(180deg, #ff5c8a, #e83e6f);
+  box-shadow: 0 3px 0 #c92a52;
+}
 .map-node {
   display: flex; align-items: center; gap: 12px; cursor: pointer;
   background: rgba(255,255,255,.14); border-radius: 16px; padding: 12px 14px;
