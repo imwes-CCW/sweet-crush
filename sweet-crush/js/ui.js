@@ -88,11 +88,11 @@ const UI = (() => {
       const stars = save.stars[lv.id] || 0;
       const node = document.createElement('div');
       node.className = 'map-node' + (unlocked ? '' : ' locked');
-      const typeLabel = lv.boss ? '👑 魔王關'
+      const typeLabel = lv.extreme ? '🔥 極限關' : lv.boss ? '👑 魔王關'
         : lv.type === 'score' ? '🎯 分數關' : lv.type === 'ingredient' ? '🌰 食材關' : '🟦 果凍關';
       const goal = lv.boss ? '❓ 每次隨機'
         : lv.type === 'score' ? `目標 ${lv.target}` : lv.type === 'ingredient' ? `收集 ${lv.ingredients} 個` : '清除果凍';
-      const obst = lv.boss ? ' 🎲' : (lv.icing ? ' 🧊' : '') + (lv.holes ? ' 🕳️' : '');
+      const obst = lv.extreme ? ' 🔥' : lv.boss ? ' 🎲' : (lv.icing ? ' 🧊' : '') + (lv.holes ? ' 🕳️' : '');
       node.innerHTML = `
         <div class="map-num">${lv.id}</div>
         <div class="map-info">
@@ -117,7 +117,8 @@ const UI = (() => {
     pendingLevel = lv;
     $('pre-title').textContent = `第 ${lv.id} 關`;
     let goal;
-    if (lv.boss) goal = `👑 <b>魔王關</b>：目標與障礙 <b>每次挑戰隨機</b>，進場才揭曉！`;
+    if (lv.extreme) goal = `🔥 <b>極限關</b>：在 <b>${lv.moves}</b> 步內達到 <b>${lv.target}</b> 分（超高難度）`;
+    else if (lv.boss) goal = `👑 <b>魔王關</b>：目標與障礙 <b>每次挑戰隨機</b>，進場才揭曉！`;
     else if (lv.type === 'score') goal = `🎯 在 <b>${lv.moves}</b> 步內達到 <b>${lv.target}</b> 分`;
     else if (lv.type === 'ingredient') goal = `🌰 在 <b>${lv.moves}</b> 步內收集 <b>${lv.ingredients}</b> 個食材`;
     else goal = `🟦 在 <b>${lv.moves}</b> 步內清除所有果凍`;

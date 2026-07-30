@@ -21,13 +21,15 @@ const LEVELS = (() => {
     return t;
   }
 
-  for (let i = 1; i <= 800; i++) {
+  for (let i = 1; i <= 1600; i++) {
     const lv = { id: i };
     lv.colors = i <= 3 ? 5 : 6;          // 前 3 關少一色好上手
     lv.rows = i <= 4 ? 8 : 9;            // 第 5 關起放大棋盤
     lv.cols = lv.rows;
-    const boss = (i % 25 === 0);
+    const extreme = (i > 800 && i % 50 === 0);   // 🔥 第 800 關後每 50 關一道「極限關」：固定每步 2000
+    const boss = (i % 25 === 0) && !extreme;      // 極限關不隨機（避免魔王重骰覆蓋 2000 難度）
     lv.boss = boss;                      // 魔王關：實際內容於開局隨機重骰（見 game.js）
+    lv.extreme = extreme;
     lv.type = pickType(i);
 
     // ---- 步數 + 非分數目標 ----
@@ -45,15 +47,15 @@ const LEVELS = (() => {
     }
 
     // ---- 障礙物：解鎖後「間隔出現」，刻意留乾淨棋盤保持新鮮 ----
-    // 🧊 糖霜：第 15 關解鎖；3 關出現、2 關休息；食材關不放（避免擋住掉落路徑）
-    if (i >= 15 && lv.type !== 'ingredient' && (i % 5) < 3) {
+    // 🧊 糖霜：第 15 關解鎖；3 關出現、2 關休息；食材關與極限關不放
+    if (i >= 15 && lv.type !== 'ingredient' && !extreme && (i % 5) < 3) {
       const size = i < 45 ? 1 : i < 95 ? 2 : 3;
       // 201 關後糖霜多層（2~3 層）；間隔出現的節奏不變
       const layers = i > 200 ? (i % 4 === 0 ? 3 : 2) : ((i >= 130 && i % 3 === 0) ? 2 : 1);
       lv.icing = { size, layers };
     }
-    // 🕳️ 造型棋盤：第 30 關解鎖；交錯出現，形狀隨進度輪替；食材關維持方形
-    if (i >= 30 && lv.type !== 'ingredient' && (Math.floor(i / 4) % 2 === 1)) {
+    // 🕳️ 造型棋盤：第 30 關解鎖；交錯出現，形狀隨進度輪替；食材關與極限關維持方形
+    if (i >= 30 && lv.type !== 'ingredient' && !extreme && (Math.floor(i / 4) % 2 === 1)) {
       const shapes = ['corners1', 'corners2', 'octagon', 'cross', 'diamond'];
       const pool = i < 60 ? shapes.slice(0, 2)
                  : i < 110 ? shapes.slice(0, 4)
@@ -69,9 +71,11 @@ const LEVELS = (() => {
     // ---- 分數關目標：依曲線算每步需求；「有阻礙」則壓到 600~800（難度改由障礙承擔）----
     if (lv.type === 'score') {
       // 每步需求分數：1→50 爬升到 800；51→200 在 600~1000 波動；
-      // 201 起進入專家區 1200~1500，並於 1500 封頂（401→800 難度不再增加、僅維持）
+      // 201 起進入專家區 1200~1500 並於 1500 封頂（401→800 不再增加）；🔥 極限關固定 2000
       let perMove;
-      if (i <= 50) {
+      if (extreme) {
+        perMove = 2000;                                  // 🔥 極限關：每步 2000（乾淨盤、不套障礙減免）
+      } else if (i <= 50) {
         perMove = Math.round(130 + (i - 1) * 13.67);     // 130 → 800
       } else if (i <= 200) {
         const center = 800 + Math.min(120, Math.floor((i - 50) / 3)); // 800 → 920
@@ -82,8 +86,8 @@ const LEVELS = (() => {
         const wave = [0, 120, -90, 60, -120, 90, -60][i % 7];
         perMove = Math.max(1200, Math.min(1500, center + wave));       // 401+ 恆為 1500 區間
       }
-      // 有糖霜／造型棋盤 → 每步需求壓進 600~800（雙重或多層障礙再往 600 降；只降不升）
-      if (lv.icing || lv.holes) {
+      // 有糖霜／造型棋盤 → 每步需求壓進 600~800（極限關不套用，保住 2000）
+      if (!extreme && (lv.icing || lv.holes)) {
         let cap = (lv.icing && lv.holes) ? 650 : 750;
         if (lv.icing && lv.icing.layers >= 2) cap -= 50;
         cap = Math.max(600, Math.min(800, cap));
@@ -179,6 +183,9 @@ const CODES = {
   'BUGFIX77':  { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
   'BUGFIX88':  { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
   'BUGFIX99':  { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
+  'LALA87':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
+  'LALA88':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
+  'LALA89':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
 };
 
 /* in-game 專用密碼（遊戲中輸入才有效） */
