@@ -261,6 +261,30 @@ body {
 .big-stars { font-size: 40px; margin: 8px 0; }
 .big-stars .star.on { color: #ffd93b; text-shadow: 0 0 12px #ffd93b; }
 
+/* ---------- 🎁 過關抽獎 ---------- */
+.draw-box {
+  background: rgba(0,0,0,.28); border-radius: 16px; padding: 12px 14px; margin: 14px 0 4px;
+  box-shadow: inset 0 0 0 2px rgba(255,217,59,.35);
+}
+.draw-title { font-size: 14px; font-weight: 800; opacity: .9; }
+.draw-prize {
+  font-size: 27px; font-weight: 900; color: #ffd93b; letter-spacing: 1px;
+  margin: 6px 0; min-height: 36px; line-height: 36px;
+}
+.draw-prize.hit { animation: draw-pop .45s ease; }
+@keyframes draw-pop { 0% { transform: scale(.4); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.draw-prize.tier-r { color: #7ee3ff; text-shadow: 0 0 12px rgba(126,227,255,.9); }
+.draw-prize.tier-l {
+  background: linear-gradient(90deg, #ffd93b, #ff8fb0, #b46cff, #ffd93b);
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: draw-pop .45s ease, tier-flow 2s linear infinite;
+}
+@keyframes tier-flow { to { background-position: 300% 0; } }
+.draw-btn { margin-top: 2px !important; }
+.draw-btn:disabled { opacity: .5; cursor: default; box-shadow: 0 2px 0 #c92a52; }
+.draw-odds { font-size: 11px; opacity: .65; margin-top: 9px; }
+
 .code-input {
   width: 100%; padding: 13px 16px; border-radius: 14px; border: none;
   font-size: 18px; text-align: center; font-weight: 700; letter-spacing: 2px;

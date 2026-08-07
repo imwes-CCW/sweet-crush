@@ -21,7 +21,12 @@ const LEVELS = (() => {
     return t;
   }
 
-  for (let i = 1; i <= 1600; i++) {
+  // 難度封頂關：1601 關起，成長型數值（步數／星等門檻）沿用第 1600 關的水準。
+  // 每步需求分數、障礙節奏本來就已封頂，所以後段難度維持同一波動，只是不再愈拖愈長。
+  const RAMP_CAP = 1600;
+
+  for (let i = 1; i <= 3200; i++) {
+    const gi = Math.min(i, RAMP_CAP);   // 成長型數值改用 gi，封頂後不再增加
     const lv = { id: i };
     lv.colors = i <= 3 ? 5 : 6;          // 前 3 關少一色好上手
     lv.rows = i <= 4 ? 8 : 9;            // 第 5 關起放大棋盤
@@ -34,15 +39,15 @@ const LEVELS = (() => {
 
     // ---- 步數 + 非分數目標 ----
     if (lv.type === 'score') {
-      lv.moves = 22 + Math.floor(i / 25);                // 22 → 30
+      lv.moves = 22 + Math.floor(gi / 25);               // 22 起步，第 1600 關封頂
     } else if (lv.type === 'jelly') {
-      lv.moves = 24 + Math.floor(i / 25);
+      lv.moves = 24 + Math.floor(gi / 25);
       const fills = ['center', 'ring', 'full'];
       // 201 關後果凍多層（2~3 層）大幅提升清除難度
       const layers = i > 200 ? (i % 3 === 0 ? 3 : 2) : ((i >= 90 && i % 2 === 0) ? 2 : 1);
       lv.jelly = { fill: fills[Math.floor(i / 4) % 3], layers };
     } else { // ingredient
-      lv.moves = 26 + Math.floor(i / 30);
+      lv.moves = 26 + Math.floor(gi / 30);
       lv.ingredients = Math.min(i > 200 ? 12 : 9, 2 + Math.floor(i / 30));
     }
 
@@ -100,7 +105,7 @@ const LEVELS = (() => {
 
   // ---- 星等門檻 ----
   for (const lv of list) {
-    const base = lv.type === 'score' ? lv.target : (2500 + lv.id * 90);
+    const base = lv.type === 'score' ? lv.target : (2500 + Math.min(lv.id, RAMP_CAP) * 90);
     lv.stars = [base, Math.round(base * 1.4), Math.round(base * 1.9)];
   }
   return list;
@@ -160,6 +165,24 @@ function buildHoles(shape, rows, cols) {
   return g;
 }
 
+/* ---------------- 🎁 關卡獎勵抽獎 ----------------
+ * 每 5 關（關卡編號為 5 的倍數）過關可抽一次點數。
+ * 機率：999 佔 80%、9999 佔 19%、99999 佔 1%。
+ */
+const DRAW_EVERY = 5;
+const DRAW_PRIZES = [
+  { amount: 999,   weight: 80, tier: 'n', label: '普通' },
+  { amount: 9999,  weight: 19, tier: 'r', label: '稀有' },
+  { amount: 99999, weight: 1,  tier: 'l', label: '傳說' },
+];
+function hasLevelDraw(levelId) { return levelId % DRAW_EVERY === 0; }
+function rollDrawPrize() {
+  const total = DRAW_PRIZES.reduce((s, p) => s + p.weight, 0);
+  let r = Math.random() * total;
+  for (const p of DRAW_PRIZES) { r -= p.weight; if (r < 0) return p; }
+  return DRAW_PRIZES[0];
+}
+
 /* ---------------- 密碼表 ----------------
  * 取代課金：輸入密碼即可解鎖內容。大小寫不拘。
  */
@@ -186,6 +209,18 @@ const CODES = {
   'LALA87':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
   'LALA88':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
   'LALA89':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
+
+  /* 🎫 序號禮包（隨機序號，10 組，各限用一次）：8 萬點＋道具各 30 */
+  'SCJA2525':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCHT6933':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCYE9435':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCBL2833':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCES4957':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCRX6999':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCTX3669':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCVJ9477':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCDA6378':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCME4832':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
 };
 
 /* in-game 專用密碼（遊戲中輸入才有效） */

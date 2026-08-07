@@ -499,6 +499,48 @@ const UI = (() => {
     refreshResources();
   }
 
+  /* ---------------- 🎁 每 5 關獎勵抽獎 ---------------- */
+  let drawPending = false;   // 本次過關還有一次抽獎機會
+  let drawToken = 0;         // 動畫期間若切到下一關，舊動畫不再寫入畫面
+
+  function setupDraw(levelId) {
+    drawToken++;
+    drawPending = hasLevelDraw(levelId);
+    $('win-draw').style.display = drawPending ? '' : 'none';
+    if (!drawPending) return;
+    const prizeEl = $('draw-prize');
+    prizeEl.className = 'draw-prize';
+    prizeEl.textContent = '？ ？ ？';
+    const btn = $('btn-draw');
+    btn.disabled = false;
+    btn.textContent = '🎲 抽獎';
+  }
+
+  async function doDraw() {
+    if (!drawPending) return;
+    drawPending = false;
+    const token = drawToken;
+    const btn = $('btn-draw'), prizeEl = $('draw-prize');
+    btn.disabled = true;
+    // 先入帳再演出：動畫途中離開畫面也不會漏發獎勵
+    const prize = rollDrawPrize();
+    Store.addCoins(prize.amount);
+    refreshResources();
+    // 轉盤：快速閃過各獎項後減速停在結果
+    for (let i = 0; i < 14; i++) {
+      if (token !== drawToken) return;
+      prizeEl.textContent = '💰 ' + DRAW_PRIZES[i % DRAW_PRIZES.length].amount;
+      Sound.click();
+      await wait(55 + i * 7);
+    }
+    if (token !== drawToken) return;
+    prizeEl.textContent = '💰 +' + prize.amount;
+    prizeEl.className = 'draw-prize hit tier-' + prize.tier;
+    btn.textContent = '✅ 已領取';
+    if (prize.tier === 'n') Sound.special(); else { Sound.combo(); Sound.win(); }
+    toast(`🎁 ${prize.label}獎：+${prize.amount} 點！`);
+  }
+
   /* ---------------- 勝 / 負 ---------------- */
   function onWin() {
     Sound.win();
@@ -509,6 +551,7 @@ const UI = (() => {
     $('win-stars').innerHTML = starHTML(stars);
     $('win-score').textContent = Game.score;
     $('win-coins').textContent = '+' + earned;
+    setupDraw(Game.level.id);
     const next = getLevel(Game.level.id + 1);
     $('btn-next').style.display = next ? '' : 'none';
     openModal('modal-win');
@@ -634,6 +677,7 @@ const UI = (() => {
     $('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') redeemCode(); });
     for (const el of document.querySelectorAll('[data-close]')) el.addEventListener('click', closeModals);
 
+    $('btn-draw').addEventListener('click', doDraw);
     $('btn-next').addEventListener('click', () => { closeModals(); openPreLevel(getLevel(Game.level.id + 1)); });
     $('btn-win-map').addEventListener('click', () => { closeModals(); showScreen('map'); });
     $('btn-retry').addEventListener('click', () => { closeModals(); openPreLevel(Game.level); });
