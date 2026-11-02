@@ -210,7 +210,7 @@ const CODES = {
   'LALA88':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
   'LALA89':    { once: true, type: 'bundle', amount: 68888, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '+68888 金幣＋所有道具各 30（限用一次）' },
 
-  /* 🎫 序號禮包（隨機序號，10 組，各限用一次）：8 萬點＋道具各 30 */
+  /* 🎫 序號禮包（隨機序號，20 組，各限用一次）：8 萬點＋道具各 30 */
   'SCJA2525':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
   'SCHT6933':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
   'SCYE9435':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
@@ -221,6 +221,16 @@ const CODES = {
   'SCVJ9477':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
   'SCDA6378':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
   'SCME4832':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCGS9713':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCHB6104':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCJX7473':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCDN2846':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCFX5250':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCYS3185':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCFA9602':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCKQ9390':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCKY6299':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
+  'SCFW2571':  { once: true, type: 'bundle', amount: 80000, grant: { hammer: 30, shuffle: 30, moves: 30 }, desc: '序號禮包：+80000 點＋所有道具各 30（限用一次）' },
 };
 
 /* in-game 專用密碼（遊戲中輸入才有效） */
